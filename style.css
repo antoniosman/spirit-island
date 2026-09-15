@@ -1,0 +1,683 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Montserrat:wght@700;900&display=swap");
+:root {
+  --ink: #f5f8ed;
+  --muted: #9eb4b4;
+  --aqua: #31e2c0;
+  --gold: #ffc95c;
+  --panel: rgba(5, 28, 34, 0.86);
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  background: #03171d;
+}
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: Inter, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.bg {
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(#00141a88, #00151dd9),
+    url("island-hero.png") center/cover;
+  z-index: -2;
+  animation: islandBreath 16s ease-in-out infinite alternate;
+}
+.bg:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--x, 50%) var(--y, 40%),
+    transparent 0,
+    #00151c99 65%
+  );
+  pointer-events: none;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button {
+  border: 1px solid #6f8d8955;
+  color: #edf9f2;
+  background: #18373c;
+  padding: 11px 16px;
+  border-radius: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.25s;
+}
+button:hover {
+  transform: translateY(-2px);
+  border-color: var(--aqua);
+  box-shadow: 0 8px 24px #00ddb733;
+}
+.primary {
+  color: #042522;
+  background: linear-gradient(135deg, #8fffe6, #20caa9);
+  border: 0;
+  box-shadow: 0 10px 35px #20d1ac44;
+}
+header {
+  height: 78px;
+  padding: 0 max(22px, 5vw);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #03191fdc;
+  border-bottom: 1px solid #85ffe522;
+  backdrop-filter: blur(18px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.brand {
+  display: flex;
+  gap: 12px;
+  color: white;
+  text-decoration: none;
+  align-items: center;
+  font-family: Montserrat;
+}
+.brand > b {
+  font-size: 35px;
+  color: var(--aqua);
+  filter: drop-shadow(0 0 13px #31e2c0);
+}
+.brand span {
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+.brand small {
+  display: block;
+  color: #82a7a3;
+  font-size: 8px;
+  letter-spacing: 3px;
+  margin-top: 3px;
+}
+header div {
+  display: flex;
+  gap: 8px;
+}
+main {
+  width: min(1400px, 92vw);
+  margin: auto;
+  padding: 55px 0 120px;
+}
+.hero {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 800px;
+  filter: drop-shadow(0 10px 25px #000);
+}
+.hero span,
+.livebar > span,
+.episode > span,
+.winner > span {
+  color: var(--aqua);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 3px;
+}
+.hero h1 {
+  font: 900 clamp(42px, 7vw, 88px)/0.94 Montserrat;
+  margin: 15px 0;
+  background: linear-gradient(120deg, #fff, #fff4b4, #68ffe3);
+  background-clip: text;
+  color: transparent;
+}
+.hero p {
+  font-size: 19px;
+  color: #d2e0db;
+  max-width: 650px;
+  line-height: 1.6;
+}
+nav {
+  display: flex;
+  gap: 25px;
+  border-bottom: 1px solid #ffffff22;
+  margin: 20px 0 35px;
+}
+nav button {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: #91aaa9;
+  padding: 17px 3px;
+}
+nav button.active {
+  color: white;
+  border-bottom: 3px solid var(--aqua);
+}
+.title,
+.livebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.title p {
+  color: var(--muted);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 18px;
+}
+.card {
+  position: relative;
+  background: linear-gradient(145deg, #18323add, #061a20ee);
+  border: 1px solid #a0eee622;
+  border-radius: 18px;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  box-shadow: 0 24px 50px #0007;
+  transition: 0.5s;
+}
+.card:hover {
+  transform: perspective(700px) rotateX(3deg) rotateY(-4deg) translateY(-9px);
+  box-shadow:
+    20px 28px 55px #0009,
+    0 0 28px color-mix(in srgb, var(--tribe), transparent 70%);
+}
+.photo {
+  height: 230px;
+  position: relative;
+  overflow: hidden;
+}
+.photo:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 52%, #071b22);
+}
+.photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: 1s;
+}
+.card:hover img {
+  transform: scale(1.07);
+}
+.photo button {
+  position: absolute;
+  z-index: 2;
+  right: 10px;
+  top: 10px;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+.card.picked {
+  border-color: var(--aqua);
+  box-shadow: 0 0 30px #20d7b044;
+}
+.card h3 {
+  margin: 5px 15px;
+  font: 800 20px Montserrat;
+}
+.card small {
+  display: block;
+  color: var(--tribe);
+  margin: 0 15px 17px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.card.out {
+  filter: grayscale(1);
+  opacity: 0.47;
+}
+.idol {
+  position: absolute;
+  z-index: 3;
+  left: 9px;
+  top: 9px;
+  background: linear-gradient(135deg, #ffe989, #f7992a);
+  color: #322000;
+  padding: 7px 9px;
+  border-radius: 7px;
+  box-shadow: 0 0 20px #ffce55;
+}
+.launch {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  width: min(760px, 92vw);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 14px;
+  background: #041c22ee;
+  border: 1px solid #72f1db44;
+  border-radius: 18px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 18px 50px #000;
+}
+.launch div {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+.launch b {
+  font: 900 25px Montserrat;
+  color: var(--gold);
+}
+.launch span {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #86a6a3;
+}
+.presets {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 25px;
+}
+.tribe-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+.tribe-editor > section,
+.relationship-section,
+.idol-give,
+#bond,
+#clique,
+.clique {
+  background: var(--panel);
+  padding: 22px;
+  border: 1px solid color-mix(in srgb, var(--c, #32e0bd), transparent 65%);
+  border-radius: 18px;
+  backdrop-filter: blur(16px);
+}
+.tribe-editor > section {
+  box-shadow: inset 0 4px var(--c);
+}
+input,
+select {
+  width: 100%;
+  padding: 12px;
+  margin: 6px 0;
+  background: #071f27;
+  color: white;
+  border: 1px solid #52706f;
+  border-radius: 8px;
+}
+.tribe-editor section > div,
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 15px;
+}
+.tribe-editor label,
+.chips label {
+  padding: 8px;
+  background: #163239;
+  border-radius: 8px;
+}
+.tribe-editor input[type="radio"],
+.chips input {
+  width: auto;
+}
+#bond {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.idol-give {
+  margin: 22px 0;
+  border-color: #ffc95c77;
+}
+.clique {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.livebar {
+  padding: 18px 22px;
+  background: #061d24e8;
+  border: 1px solid #6df5df44;
+  border-radius: 15px;
+  position: sticky;
+  top: 90px;
+  z-index: 10;
+  backdrop-filter: blur(17px);
+}
+.livebar > b {
+  font: 900 16px Montserrat;
+}
+.livebar > div {
+  display: flex;
+  gap: 8px;
+}
+.livegrid {
+  margin: 26px 0;
+}
+.livegrid .photo {
+  height: 180px;
+}
+.episode {
+  min-height: 270px;
+  background: linear-gradient(110deg, #061d24ee, #102f2bdd);
+  border-left: 4px solid var(--aqua);
+  border-radius: 0 20px 20px 0;
+  padding: 30px;
+  margin-top: 30px;
+  box-shadow: 0 30px 80px #0008;
+}
+.episode h2 {
+  font: 900 38px Montserrat;
+  margin: 10px 0;
+}
+.episode p {
+  font-size: 17px;
+  line-height: 1.7;
+  color: #cfdbd7;
+}
+.faces {
+  display: flex;
+}
+.faces img {
+  width: 78px;
+  height: 78px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid #0c3034;
+  margin-right: -12px;
+}
+.winner {
+  text-align: center;
+  padding: 50px;
+  background: radial-gradient(circle, #5e5428, #071c20 65%);
+  border: 1px solid #ffe27a;
+  border-radius: 30px;
+  animation: winnerGlow 2s infinite alternate;
+}
+.winner img {
+  width: 250px;
+  height: 250px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 5px solid var(--gold);
+  box-shadow: 0 0 80px #ffd263;
+}
+.winner h1 {
+  font: 900 65px Montserrat;
+  margin: 15px;
+}
+.intro,
+.council {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #020e13;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.intro:before,
+.council:before {
+  content: "";
+  position: absolute;
+  inset: -5%;
+  background: url("island-hero.png") center/cover;
+  filter: brightness(0.35);
+  animation: camera 8s ease-in-out infinite alternate;
+}
+.intro > button,
+.council > button {
+  position: absolute;
+  right: 25px;
+  top: 25px;
+  z-index: 5;
+}
+.introcontent,
+.council > div {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  animation: sceneIn 0.7s both;
+}
+.tribemark i {
+  font-size: 110px;
+  color: var(--c);
+  filter: drop-shadow(0 0 35px var(--c));
+}
+.tribemark h1 {
+  font: 900 clamp(60px, 11vw, 150px) Montserrat;
+  margin: 0;
+  color: var(--c);
+  text-shadow: 0 12px 50px #000;
+}
+.tribemark p {
+  font-size: 18px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+}
+.introperson img,
+.council img {
+  width: min(780px, 80vw);
+  height: min(62vh, 650px);
+  object-fit: cover;
+  border-radius: 30px;
+  border: 2px solid var(--c, var(--gold));
+  box-shadow:
+    0 30px 100px #000,
+    0 0 60px color-mix(in srgb, var(--c, var(--gold)), transparent 50%);
+  animation: portraitIn 1.7s ease both;
+}
+.introperson h1 {
+  font: 900 clamp(38px, 7vw, 85px) Montserrat;
+  margin: -70px 0 0;
+  position: relative;
+  text-shadow: 0 5px 30px #000;
+}
+.introperson h1 small {
+  display: block;
+  font-size: 18px;
+  color: #ddd;
+}
+.introperson b {
+  color: var(--c);
+  letter-spacing: 4px;
+}
+.introperson.gone {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+.council:before {
+  filter: brightness(0.23) saturate(0.7);
+}
+.council h1 {
+  font: 900 clamp(25px, 5vw, 60px) Montserrat;
+}
+.council p {
+  font-size: 20px;
+  color: var(--gold);
+}
+.pov:before {
+  filter: brightness(0.18) blur(3px);
+}
+.pov img {
+  animation:
+    portraitIn 2.2s ease both,
+    camera 8s ease-in-out infinite alternate;
+}
+.pov > div > span {
+  color: #ff5b62;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-shadow: 0 0 15px #ff3040;
+}
+.pov p {
+  max-width: 750px;
+  margin: 20px auto;
+  padding: 15px 24px;
+  background: #001318cc;
+  border-left: 3px solid var(--aqua);
+  color: white;
+  font-size: clamp(18px, 3vw, 28px);
+}
+dialog {
+  width: min(760px, 94vw);
+  background: #06232b;
+  color: white;
+  border: 1px solid #6ce6d0;
+  border-radius: 20px;
+  padding: 27px;
+}
+dialog::backdrop {
+  background: #001015dd;
+  backdrop-filter: blur(9px);
+}
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  max-height: 55vh;
+  overflow: auto;
+}
+.choices label {
+  padding: 7px;
+  background: #102f36;
+  border: 1px solid #42625f;
+  border-radius: 12px;
+  text-align: center;
+}
+.choices label:has(input:checked) {
+  border-color: var(--aqua);
+  box-shadow: 0 0 20px #31e2c055;
+}
+.choices input {
+  position: absolute;
+  opacity: 0;
+}
+.choices img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.choices b {
+  display: block;
+  padding: 6px;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+#toast {
+  position: fixed;
+  z-index: 200;
+  left: 50%;
+  bottom: 25px;
+  transform: translate(-50%, 30px);
+  opacity: 0;
+  background: var(--gold);
+  color: #17200d;
+  padding: 13px 24px;
+  border-radius: 9px;
+  font-weight: 800;
+  transition: 0.3s;
+}
+#toast.show {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+@keyframes islandBreath {
+  to {
+    transform: scale(1.035);
+  }
+}
+@keyframes camera {
+  to {
+    transform: scale(1.08) translate(-1%, 1%);
+  }
+}
+@keyframes sceneIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8) rotateX(12deg);
+  }
+}
+@keyframes portraitIn {
+  from {
+    opacity: 0;
+    transform: scale(1.2) rotateY(-8deg);
+    filter: blur(12px);
+  }
+}
+@keyframes winnerGlow {
+  to {
+    box-shadow: 0 0 80px #ffcb4f55;
+  }
+}
+@media (max-width: 760px) {
+  header {
+    padding: 0 12px;
+  }
+  .brand small {
+    display: none;
+  }
+  header button {
+    padding: 8px;
+  }
+  .hero {
+    min-height: 240px;
+  }
+  .title,
+  .livebar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .livebar {
+    top: 78px;
+  }
+  .livebar > div {
+    overflow: auto;
+    width: 100%;
+  }
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .photo,
+  .livegrid .photo {
+    height: 180px;
+  }
+  #bond {
+    grid-template-columns: 1fr;
+  }
+  .launch {
+    bottom: 8px;
+  }
+  .launch div {
+    display: none;
+  }
+  .tribe-editor {
+    grid-template-columns: 1fr;
+  }
+  .introperson img {
+    height: 55vh;
+    width: 92vw;
+  }
+  .winner h1 {
+    font-size: 42px;
+  }
+}
