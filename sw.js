@@ -1,4 +1,4 @@
-const CACHE = "spirit-island-v1";
+const CACHE = "spirit-island-v2";
 const CORE = [
   "./",
   "index.html",
@@ -12,6 +12,7 @@ const CORE = [
   "icon-512.png",
   "apple-touch-icon.png",
   "island-hero.png",
+  "intro_music.mp3",
 ];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)));

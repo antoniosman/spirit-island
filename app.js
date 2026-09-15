@@ -1,5 +1,5 @@
 import { createGame, step, pairKey } from "./engine.js";
-const VERSION = "2026.09.15.1",
+const VERSION = "2026.09.15.2",
   files = [
     "Alex.webp",
     "Billy.webp",
@@ -393,15 +393,24 @@ async function choice(title, text, players) {
 async function intro() {
   if (!state.cinema) return;
   const g = state.game,
-    overlay = document.createElement("div");
+    overlay = document.createElement("div"),
+    music = new Audio("intro_music.mp3");
+  music.loop = true;
+  music.volume = 0.62;
   overlay.className = "intro";
   overlay.innerHTML =
     '<button>SKIP INTRO</button><div class="introcontent"></div>';
   document.body.append(overlay);
+  music.play().catch(() => {});
   let stop = false;
-  overlay.querySelector("button").onclick = () => {
+  const finish = () => {
     stop = true;
+    music.pause();
+    music.currentTime = 0;
     overlay.remove();
+  };
+  overlay.querySelector("button").onclick = () => {
+    finish();
   };
   const box = overlay.querySelector(".introcontent"),
     wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -420,7 +429,7 @@ async function intro() {
       await wait(1700);
     }
   }
-  if (!stop) overlay.remove();
+  if (!stop) finish();
 }
 async function councilReveal(e) {
   if (!state.cinema || !e.evicted) return;
