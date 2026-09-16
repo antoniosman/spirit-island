@@ -1,4 +1,4 @@
-const CACHE = "spirit-island-v4";
+const CACHE = "spirit-island-v6";
 const CORE = [
   "./",
   "index.html",

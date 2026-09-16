@@ -525,6 +525,33 @@ select {
   gap: 13px;
   padding: 10px;
   border-bottom: 1px solid #ffffff16;
+  position: relative;
+  overflow: hidden;
+  transition: 0.28s ease;
+}
+.ranking > div:hover {
+  transform: translateX(7px);
+  background: #16423c66;
+}
+.ranking > div.active-player:after {
+  content: "LIVE";
+  position: absolute;
+  right: 12px;
+  top: 7px;
+  color: #4effce;
+  font: 900 8px Montserrat;
+  letter-spacing: 2px;
+  opacity: 0.65;
+}
+.ranking > div:nth-of-type(1) {
+  background: linear-gradient(90deg, #c8912638, transparent);
+  border-left: 3px solid #ffd35d;
+}
+.ranking > div:nth-of-type(2) {
+  border-left: 3px solid #c9e4e9;
+}
+.ranking > div:nth-of-type(3) {
+  border-left: 3px solid #c77b43;
 }
 .ranking > div > b {
   font: 900 24px Montserrat;
@@ -696,6 +723,33 @@ select {
   color: #fff2a8;
   text-shadow: 0 0 20px #ffb300;
 }
+.council-clash:after {
+  content: "COUNCIL CLASH";
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 58%;
+  transform: translate(-50%, -50%) rotate(-4deg);
+  color: #fff;
+  font: 1000 clamp(38px, 8vw, 110px) Montserrat;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 12px #ff472f, 0 0 55px #ff1d00;
+  animation: clashFlash 0.22s steps(2) infinite alternate;
+  pointer-events: none;
+}
+.tie-night:after {
+  content: "TIE BREAK";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  color: #ffdf7a22;
+  font: 1000 16vw Montserrat;
+  letter-spacing: -0.08em;
+  animation: tiePulse 0.75s ease-in-out infinite alternate;
+  pointer-events: none;
+}
 .council-stage3d,
 .challenge-stage3d,
 .idol-stage3d,
@@ -784,6 +838,29 @@ select {
     linear-gradient(#00191f66, #001116d9),
     url("island-hero.png") center/cover;
 }
+.idol-discovery.idol-found:before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  z-index: 4;
+  pointer-events: none;
+  background: conic-gradient(from 0deg, transparent, #ffd85a55, transparent 32%);
+  animation: relicSpin 2.5s linear infinite;
+  mix-blend-mode: screen;
+}
+.idol-discovery[data-idol="mirror"] { --idol-accent: #c9f4ff; }
+.idol-discovery[data-idol="storm"] { --idol-accent: #4f83ff; }
+.idol-discovery[data-idol="twin"] { --idol-accent: #ff65ae; }
+.idol-discovery[data-idol="oracle"] { --idol-accent: #ad70ff; }
+.idol-discovery[data-idol="flame"] { --idol-accent: #ffd55e; }
+.idol-discovery.idol-found .idol-discovery-hud {
+  border-color: var(--idol-accent);
+  box-shadow: 0 0 70px color-mix(in srgb, var(--idol-accent), transparent 45%);
+}
+.idol-discovery.idol-found .idol-discovery-hud h1 {
+  color: var(--idol-accent);
+  text-shadow: 0 0 28px var(--idol-accent);
+}
 .challenge-scene:after,
 .idol-discovery:after {
   content: "";
@@ -848,6 +925,26 @@ select {
   border: 1px solid #f7c14c66;
   background: #553d1022;
   border-radius: 10px;
+}
+.idol-type-card,
+.tie-card {
+  display: grid;
+  gap: 3px;
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid #e9c76188;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #44330b88, #082c2c88);
+  box-shadow: inset 0 0 30px #ffc83d12;
+}
+.idol-type-card small { color: #ddd5b0; }
+.tie-card {
+  display: block;
+  color: #ff8d72;
+  border-color: #ff694f88;
+  background: #551a194f;
+  font-weight: 900;
+  letter-spacing: 1px;
 }
 .cast-count {
   display: flex;
@@ -1147,6 +1244,15 @@ dialog::backdrop {
   to {
     transform: perspective(600px) translateY(70px) rotateX(1deg);
   }
+}
+@keyframes clashFlash {
+  to { opacity: 0.42; transform: translate(-50%, -50%) rotate(3deg) scale(1.06); }
+}
+@keyframes tiePulse {
+  to { opacity: 0.18; transform: scale(1.04); }
+}
+@keyframes relicSpin {
+  to { transform: rotate(360deg); }
 }
 @media (max-width: 760px) {
   header {

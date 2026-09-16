@@ -1,4 +1,38 @@
 export const pairKey = (a, b) => [a, b].sort().join("|");
+export const IDOL_TYPES = [
+  {
+    id: "flame",
+    name: "Idol της Φλόγας",
+    effect: "Ακυρώνει όλες τις ψήφους εναντίον ενός παίκτη.",
+    searchMethod: "ruins",
+  },
+  {
+    id: "mirror",
+    name: "Idol του Καθρέφτη",
+    effect: "Επιστρέφει τις ψήφους στον ισχυρότερο αντίπαλο.",
+    searchMethod: "dig",
+  },
+  {
+    id: "storm",
+    name: "Idol της Καταιγίδας",
+    effect: "Σβήνει μία εχθρική ψήφο και χαρίζει μία δεύτερη ψήφο.",
+    searchMethod: "fish",
+  },
+  {
+    id: "twin",
+    name: "Δίδυμο Idol των Δεσμών",
+    effect: "Προστατεύει τον κάτοχο και τον πιο στενό του σύμμαχο.",
+    searchMethod: "jungle",
+  },
+  {
+    id: "oracle",
+    name: "Idol του Χρησμού",
+    effect: "Προβλέπει την αποχώρηση και δίνει κρυφή ασυλία στον κάτοχο.",
+    searchMethod: "dive",
+  },
+];
+const idolInfo = (type = "flame") =>
+  IDOL_TYPES.find((x) => x.id === type) || IDOL_TYPES[0];
 const pick = (items, score, rng) =>
   items
     .map((x) => ({ x, n: score(x) + rng() * 10 }))
@@ -38,7 +72,15 @@ export function createGame(
     finalists: [],
     finalData: null,
     idols: idolOwner
-      ? [{ id: "idol-start", owner: idolOwner, used: false, foundEpisode: 0 }]
+      ? [
+          {
+            id: "idol-start",
+            owner: idolOwner,
+            used: false,
+            foundEpisode: 0,
+            type: "flame",
+          },
+        ]
       : [],
     idol: { owner: idolOwner, used: false },
     idolSerial: idolOwner ? 1 : 0,
@@ -58,10 +100,12 @@ export function step(s, rng = Math.random) {
             owner: s.idol.owner,
             used: false,
             foundEpisode: 0,
+            type: "flame",
           },
         ]
       : [];
   s.idolSerial ||= s.idols.length;
+  s.idols.forEach((idol) => (idol.type ||= "flame"));
   const alive = s.players.filter((p) => !p.out),
     get = (id) => s.players.find((p) => p.id === id),
     name = (id) => get(id)?.name || "";
@@ -245,20 +289,30 @@ export function step(s, rng = Math.random) {
         finder =
           searchers[Math.floor(rng() * searchers.length)] ||
           alive[Math.floor(rng() * alive.length)],
+        type = IDOL_TYPES[Math.floor(rng() * IDOL_TYPES.length)],
         idol = {
           id: `idol-${++s.idolSerial}`,
           owner: finder.id,
           used: false,
           foundEpisode: s.episode,
+          type: type.id,
         };
       s.idols.push(idol);
       s.idol = { owner: finder.id, used: false };
       s.stage = "council";
       return event(
-        "Το κρυμμένο Idol βρέθηκε",
-        `${finder.name} ανακαλύπτει ένα κρυμμένο Idol. Υπάρχουν ${activeIdols.length + 1} ενεργά Idols στο παιχνίδι.`,
+        `${type.name} · Βρέθηκε!`,
+        `${finder.name} ανακαλύπτει το ${type.name}. ${type.effect} Υπάρχουν ${activeIdols.length + 1} ενεργά Idols στο παιχνίδι.`,
         [finder.id],
-        { idol: true, idolFound: idol.id, idolOwner: finder.id },
+        {
+          idol: true,
+          idolFound: idol.id,
+          idolOwner: finder.id,
+          idolType: type.id,
+          idolName: type.name,
+          idolEffect: type.effect,
+          searchMethod: type.searchMethod,
+        },
       );
     }
     const viable = s.cliques.filter(
@@ -312,10 +366,22 @@ export function step(s, rng = Math.random) {
         },
       );
     }
-    const a = alive[Math.floor(rng() * alive.length)],
-      b = alive.filter((p) => p.id !== a.id)[
-        Math.floor(rng() * (alive.length - 1))
-      ],
+    const councilPool = s.merge
+        ? alive
+        : alive.filter((p) => p.tribe !== s.safeTribe),
+      socialPool =
+        councilPool.length >= 2
+          ? councilPool
+          : [
+              ...new Set(alive.map((p) => p.tribe)),
+            ]
+              .map((tribe) => alive.filter((p) => p.tribe === tribe))
+              .sort((x, y) => y.length - x.length)[0],
+      a = socialPool[Math.floor(rng() * socialPool.length)],
+      possibleB = socialPool.filter(
+        (p) => p.id !== a.id && (s.merge || p.tribe === a.tribe),
+      ),
+      b = possibleB[Math.floor(rng() * possibleB.length)],
       witness = alive
         .filter((p) => p.id !== a.id && p.id !== b.id)
         .sort((x, y) => y.strategy - x.strategy)[0],
@@ -386,13 +452,49 @@ export function step(s, rng = Math.random) {
         nullified.has(out)
       )
         continue;
-      if (out === holder.id || bond(holder.id, out) >= 6) {
+      const info = idolInfo(idol.type),
+        holderVotes = votes.filter((v) => v.target === holder.id).length,
+        maxVotes = rank()[0]?.n || 0,
+        shouldPlay =
+          out === holder.id ||
+          bond(holder.id, out) >= 6 ||
+          (idol.type === "storm" && holderVotes >= Math.max(1, maxVotes - 1));
+      if (shouldPlay) {
         const saved = out;
         idol.used = true;
         idol.playedEpisode = s.episode;
         idol.saved = saved;
-        nullified.add(saved);
-        idolPlays.push({ idol: idol.id, actor: holder.id, saved });
+        let redirectedTo = null;
+        if (idol.type === "mirror") {
+          redirectedTo = rank().find((x) => x.id !== saved && x.id !== holder.id)?.id;
+          if (redirectedTo)
+            votes.forEach((vote) => {
+              if (vote.target === saved) vote.target = redirectedTo;
+            });
+        } else if (idol.type === "storm") {
+          const hostile = votes.findIndex((v) => v.target === holder.id);
+          if (hostile >= 0) votes.splice(hostile, 1);
+          redirectedTo = rank().find((x) => x.id !== holder.id)?.id;
+          if (redirectedTo) votes.push({ voter: holder.id, target: redirectedTo, bonus: true });
+        } else {
+          nullified.add(saved);
+          if (idol.type === "twin") {
+            const ally = vulnerable
+              .filter((p) => p.id !== holder.id && p.id !== saved)
+              .sort((a, b) => bond(holder.id, b.id) - bond(holder.id, a.id))[0];
+            if (ally && bond(holder.id, ally.id) > 0) nullified.add(ally.id);
+          }
+        }
+        idolPlays.push({
+          idol: idol.id,
+          type: idol.type,
+          name: info.name,
+          effect: info.effect,
+          actor: holder.id,
+          saved,
+          redirectedTo,
+          protected: [...nullified],
+        });
         out = rank().find((x) => !nullified.has(x.id))?.id || out;
       }
     }
@@ -439,30 +541,96 @@ export function step(s, rng = Math.random) {
             : "Η σιωπή απόψε λέει περισσότερα από τις κουβέντες στην παραλία.",
         },
       ].filter(Boolean);
-    const leaving = get(out);
-    leaving.out = true;
-    s.order.push(out);
-    if (s.merge) s.jury.push(out);
+    const eligibleRank = rank().filter((x) => !nullified.has(x.id)),
+      topVotes = eligibleRank[0]?.n || 0,
+      tied = eligibleRank.filter((x) => x.n === topVotes).slice(0, 2),
+      evictedIds = [],
+      tieResolution = tied.length > 1 ? { contestants: tied.map((x) => x.id) } : null;
+    if (tieResolution) {
+      const fate = rng();
+      if (fate < 0.8) {
+        const survivor = pick(
+          tied.map((x) => get(x.id)),
+          (p) => p.competition * 1.25 + p.strategy * 0.75,
+          rng,
+        );
+        out = tied.find((x) => x.id !== survivor.id).id;
+        evictedIds.push(out);
+        Object.assign(tieResolution, {
+          type: "duel",
+          survivor: survivor.id,
+          evicted: out,
+          title: "Μονομαχία της Φωτιάς",
+        });
+      } else if (fate < 0.9 && alive.length > 4) {
+        evictedIds.push(...tied.map((x) => x.id));
+        out = evictedIds[0];
+        Object.assign(tieResolution, {
+          type: "doubleOut",
+          evicted: [...evictedIds],
+          title: "Διπλή αποχώρηση",
+        });
+      } else if (fate >= 0.9) {
+        out = null;
+        Object.assign(tieResolution, {
+          type: "bothStay",
+          title: "Το Νησί τους κρατά και τους δύο",
+        });
+      } else {
+        const survivor = pick(
+          tied.map((x) => get(x.id)),
+          (p) => p.competition * 1.25 + p.strategy * 0.75,
+          rng,
+        );
+        out = tied.find((x) => x.id !== survivor.id).id;
+        evictedIds.push(out);
+        Object.assign(tieResolution, {
+          type: "duel",
+          survivor: survivor.id,
+          evicted: out,
+          title: "Μονομαχία της Φωτιάς",
+        });
+      }
+    } else if (out) evictedIds.push(out);
+    const evictions = evictedIds.map((id) => {
+      const leaving = get(id),
+        place = s.players.length - s.order.length;
+      leaving.out = true;
+      s.order.push(id);
+      if (s.merge) s.jury.push(id);
+      return { id, place };
+    });
     const safeOrder = vulnerable
-        .filter((p) => p.id !== out && !nullified.has(p.id))
+        .filter(
+          (p) =>
+            !evictedIds.includes(p.id) &&
+            !nullified.has(p.id) &&
+            !tieResolution?.contestants.includes(p.id),
+        )
         .sort(() => rng() - 0.5)
         .map((p) => p.id),
-      place = s.players.length - s.order.length + 1;
+      place = evictions[0]?.place || null;
     s.individualImmune = null;
     s.safeTribe = null;
     s.stage = "challenge";
     const result = event(
       "Συμβούλιο του Νησιού",
-      `${leaving.name}, η φλόγα σου σβήνει — Θέση ${place}.${idolPlays.length ? ` Παίχτηκαν ${idolPlays.length} Idol και ακυρώθηκαν οι ψήφοι των ${idolPlays.map((x) => name(x.saved)).join(", ")}.` : ""}`,
-      safeOrder.concat([...nullified], out),
+      evictions.length
+        ? `${evictions.map((x) => `${name(x.id)} — Θέση ${x.place}`).join(" και ")}. ${tieResolution ? tieResolution.title + ". " : ""}${idolPlays.length ? `Παίχτηκαν ${idolPlays.length} διαφορετικά Idol.` : ""}`
+        : `${tieResolution?.title}. Η ψηφοφορία ολοκληρώνεται χωρίς αποχώρηση.`,
+      safeOrder.concat([...nullified], evictedIds),
       {
-        evicted: out,
+        council: true,
+        evicted: evictedIds[0] || null,
+        evictedIds,
+        evictions,
         safeOrder,
         place,
         idolPlayed,
         idolSaved,
         idolPlays,
         councilDialogue,
+        tieResolution,
         votes,
         voteTally: rank(),
       },

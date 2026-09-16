@@ -59,6 +59,136 @@ async function portraitMaterial(url, prepared = false) {
   }
 }
 
+const SPIRIT_LOOKS = {
+  Alex: ["phoenix", 0xffa31a],
+  Billy: ["kitsune", 0x9b5cff],
+  Catherine: ["crystal", 0xff572e],
+  Demarin: ["shadow", 0x59606c],
+  Elisa: ["mermaid", 0x6fd4e7],
+  Ester: ["oracle", 0x8f55d9],
+  Eva: ["doll", 0xd98ea4],
+  Evaggelia: ["ice", 0x9fdcff],
+  Evelyn: ["fairy", 0x6fbf58],
+  Hope: ["angel", 0x8d1535],
+  Ian: ["summoner", 0x631525],
+  Irene: ["beast", 0xe67b24],
+  Jasmine: ["paladin", 0xe3b94e],
+  Luna: ["elf", 0xf2e6b9],
+  Paul: ["alchemist", 0x68a748],
+  Pauline: ["ice", 0x74c5ff],
+  Phillip: ["necromancer", 0x9a1737],
+  Rino: ["werewolf", 0x3c78a8],
+  Sargenie: ["genie", 0x334fb2],
+  Smaragda: ["puppeteer", 0xb82935],
+  Sorina: ["ghost", 0xbad8f2],
+  Tony: ["wizard", 0xb51d33],
+  Vicky: ["archer", 0xa91f38],
+  Vincent: ["sorcerer", 0x542a7d],
+  Violet: ["cyborg", 0x7a3fe3],
+  Zoe: ["candy", 0xff7b33],
+};
+
+function addSpiritOutfit(group, head, player, dark, gold) {
+  const look = SPIRIT_LOOKS[player.name];
+  if (!look) return;
+  const [type, accentColor] = look,
+    accent = material(accentColor, 0.3, 0.55),
+    glow = new THREE.MeshStandardMaterial({
+      color: accentColor,
+      emissive: accentColor,
+      emissiveIntensity: 0.65,
+      roughness: 0.25,
+      metalness: 0.5,
+    }),
+    cone = (parent, pos, s = 1, mat = accent) => {
+      const x = mesh(new THREE.ConeGeometry(0.22 * s, 0.72 * s, 8), mat, parent, pos);
+      return x;
+    },
+    wing = (side, colorMat = accent) => {
+      const w = mesh(
+        new THREE.ConeGeometry(0.44, 1.65, 5),
+        colorMat,
+        group,
+        [side * 0.62, 1.88, -0.34],
+      );
+      w.rotation.z = side * -0.72;
+      w.rotation.x = -0.2;
+      return w;
+    },
+    ears = (mat = accent, long = false) => {
+      for (const side of [-1, 1]) {
+        const e = cone(head, [side * 0.38, 0.17, 0], long ? 0.72 : 0.5, mat);
+        e.rotation.z = side * -1.25;
+      }
+    };
+  if (["phoenix", "angel", "fairy", "ice"].includes(type)) {
+    wing(-1, type === "angel" ? dark : glow);
+    wing(1, type === "angel" ? dark : glow);
+  }
+  if (type === "wizard") {
+    const hat = cone(head, [0, 0.72, -0.02], 1.25, dark);
+    hat.rotation.z = -0.08;
+    const brim = mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.08, 24), dark, head, [0, 0.38, 0]);
+    mesh(new THREE.SphereGeometry(0.13, 14, 10), glow, group, [0.6, 1.1, 0.35]);
+  } else if (["elf", "fairy"].includes(type)) {
+    ears(accent, true);
+    mesh(new THREE.OctahedronGeometry(0.13, 0), glow, group, [0, 2.05, 0.48]);
+  } else if (["kitsune", "beast", "werewolf"].includes(type)) {
+    ears(type === "kitsune" ? accent : dark);
+    const tails = type === "kitsune" ? 5 : 1;
+    for (let i = 0; i < tails; i++) {
+      const t = mesh(
+        new THREE.CapsuleGeometry(0.09, 0.92, 5, 9),
+        type === "kitsune" ? accent : dark,
+        group,
+        [(i - (tails - 1) / 2) * 0.2, 0.92, -0.38],
+      );
+      t.rotation.z = (i - (tails - 1) / 2) * 0.23;
+    }
+  } else if (["shadow", "summoner", "necromancer", "sorcerer", "ghost"].includes(type)) {
+    const hood = mesh(new THREE.TorusGeometry(0.47, 0.12, 9, 26), dark, head, [0, 0.04, -0.03]);
+    hood.rotation.x = Math.PI / 2;
+    for (const side of [-1, 1]) wing(side, type === "ghost" ? accent : dark).scale.set(0.65, 0.8, 0.5);
+    mesh(new THREE.SphereGeometry(0.12, 14, 10), glow, group, [0, 1.72, 0.48]);
+  } else if (["crystal", "oracle", "ice"].includes(type)) {
+    for (let i = -2; i <= 2; i++) {
+      const crown = cone(head, [i * 0.16, 0.48 - Math.abs(i) * 0.035, 0], 0.46 + (2 - Math.abs(i)) * 0.12, glow);
+      crown.rotation.z = -i * 0.11;
+    }
+  } else if (type === "mermaid") {
+    const fin = mesh(new THREE.ConeGeometry(0.5, 1.35, 18), accent, group, [0, 0.55, 0]);
+    fin.rotation.z = Math.PI;
+    for (const side of [-1, 1]) {
+      const shell = mesh(new THREE.SphereGeometry(0.15, 12, 8), glow, group, [side * 0.21, 1.8, 0.34]);
+      shell.scale.z = 0.45;
+    }
+  } else if (["doll", "puppeteer"].includes(type)) {
+    mesh(new THREE.ConeGeometry(0.72, 1.18, 24), accent, group, [0, 1.05, 0]);
+    for (const side of [-1, 1]) {
+      const thread = mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.25, 5), gold, group, [side * 0.48, 2.6, 0]);
+      thread.rotation.z = side * 0.16;
+    }
+  } else if (type === "paladin") {
+    for (const side of [-1, 1]) mesh(new THREE.DodecahedronGeometry(0.24, 0), gold, group, [side * 0.48, 1.91, 0]);
+    mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 8), gold, group, [-0.57, 1.26, 0.18]).rotation.x = Math.PI / 2;
+  } else if (type === "archer") {
+    const bow = mesh(new THREE.TorusGeometry(0.48, 0.035, 8, 28, Math.PI), accent, group, [0.58, 1.42, 0.16]);
+    bow.rotation.z = Math.PI / 2;
+  } else if (type === "alchemist") {
+    for (let i = -1; i <= 1; i++) mesh(new THREE.SphereGeometry(0.09, 12, 8), i ? accent : glow, group, [i * 0.22, 1.42, 0.38]);
+  } else if (type === "genie") {
+    mesh(new THREE.TorusGeometry(0.38, 0.12, 10, 24), accent, head, [0, 0.42, 0]).rotation.x = Math.PI / 2;
+    mesh(new THREE.ConeGeometry(0.46, 1.25, 18), accent, group, [0, 0.55, 0]).rotation.z = Math.PI;
+  } else if (type === "cyborg") {
+    for (const side of [-1, 1]) mesh(new THREE.BoxGeometry(0.28, 0.24, 0.42), accent, group, [side * 0.5, 1.92, 0]);
+    mesh(new THREE.OctahedronGeometry(0.16, 0), glow, group, [0, 1.68, 0.39]);
+  } else if (type === "candy") {
+    const candy = mesh(new THREE.TorusGeometry(0.19, 0.07, 8, 20), glow, group, [0.58, 1.72, 0.2]);
+    mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.3, 8), accent, group, [0.58, 1.08, 0.2]);
+    candy.rotation.y = 0.3;
+  }
+}
+
 async function avatar(player, color = "#43d9c2") {
   const group = new THREE.Group();
   group.userData.playerId = player.id;
@@ -127,6 +257,7 @@ async function avatar(player, color = "#43d9c2") {
     group,
     [0, 1.42, 0],
   );
+  addSpiritOutfit(group, head, player, dark, gold);
   group.userData.rig = {
     head,
     leftArm: leftArm.pivot,
@@ -138,14 +269,62 @@ async function avatar(player, color = "#43d9c2") {
   return group;
 }
 
-function createIdol(parent, position = [0, 0, 0], scale = 1) {
+function createIdol(parent, position = [0, 0, 0], scale = 1, type = "flame") {
   const idol = new THREE.Group();
   idol.position.set(...position);
   idol.scale.setScalar(scale);
   parent.add(idol);
-  const stone = material(0x21bca7, 0.32, 0.62);
-  const gold = material(0xffcf55, 0.24, 0.84);
-  mesh(new THREE.OctahedronGeometry(0.48, 1), stone, idol, [0, 0.75, 0]);
+  const palettes = {
+      flame: [0x21bca7, 0xffcf55],
+      mirror: [0xbfeeff, 0xffffff],
+      storm: [0x196bff, 0x8fffff],
+      twin: [0xff5da8, 0xffdc78],
+      oracle: [0x773cff, 0xe8a7ff],
+    },
+    [baseColor, glowColor] = palettes[type] || palettes.flame,
+    stone = material(baseColor, 0.24, 0.72),
+    gold = material(glowColor, 0.18, 0.9);
+  if (type === "mirror") {
+    const disc = mesh(
+      new THREE.CylinderGeometry(0.52, 0.52, 0.12, 32),
+      stone,
+      idol,
+      [0, 0.78, 0],
+    );
+    disc.rotation.x = Math.PI / 2;
+    mesh(new THREE.RingGeometry(0.19, 0.43, 32), gold, idol, [0, 0.78, 0.08]);
+  } else if (type === "storm") {
+    mesh(new THREE.IcosahedronGeometry(0.46, 1), stone, idol, [0, 0.78, 0]);
+    for (const side of [-1, 1]) {
+      const bolt = mesh(new THREE.ConeGeometry(0.1, 0.72, 5), gold, idol, [
+        side * 0.36,
+        0.72,
+        0.15,
+      ]);
+      bolt.rotation.z = side * 0.55;
+    }
+  } else if (type === "twin") {
+    for (const side of [-1, 1]) {
+      const crystal = mesh(
+        new THREE.OctahedronGeometry(0.34, 0),
+        side < 0 ? stone : gold,
+        idol,
+        [side * 0.3, 0.78, 0],
+      );
+      crystal.rotation.z = side * 0.22;
+    }
+  } else if (type === "oracle") {
+    mesh(new THREE.DodecahedronGeometry(0.48, 0), stone, idol, [0, 0.77, 0]);
+    const pupil = mesh(
+      new THREE.SphereGeometry(0.15, 18, 12),
+      gold,
+      idol,
+      [0, 0.8, 0.43],
+    );
+    pupil.scale.x = 0.55;
+  } else {
+    mesh(new THREE.OctahedronGeometry(0.48, 1), stone, idol, [0, 0.75, 0]);
+  }
   const eye = mesh(
     new THREE.TorusGeometry(0.3, 0.07, 10, 32),
     gold,
@@ -154,18 +333,19 @@ function createIdol(parent, position = [0, 0, 0], scale = 1) {
   );
   eye.scale.y = 0.52;
   mesh(new THREE.SphereGeometry(0.1, 16, 10), gold, idol, [0, 0.8, 0.48]);
-  for (const side of [-1, 1]) {
-    const horn = mesh(new THREE.ConeGeometry(0.12, 0.65, 10), gold, idol, [
-      side * 0.39,
-      1.16,
-      0,
-    ]);
-    horn.rotation.z = side * -0.55;
-  }
+  if (type === "flame")
+    for (const side of [-1, 1]) {
+      const horn = mesh(new THREE.ConeGeometry(0.12, 0.65, 10), gold, idol, [
+        side * 0.39,
+        1.16,
+        0,
+      ]);
+      horn.rotation.z = side * -0.55;
+    }
   const aura = mesh(
     new THREE.TorusGeometry(0.72, 0.018, 8, 64),
     new THREE.MeshBasicMaterial({
-      color: 0xffdb61,
+      color: glowColor,
       transparent: true,
       opacity: 0.7,
     }),
@@ -174,6 +354,7 @@ function createIdol(parent, position = [0, 0, 0], scale = 1) {
   );
   aura.rotation.x = Math.PI / 2;
   idol.userData.aura = aura;
+  idol.userData.idolType = type;
   return idol;
 }
 
@@ -279,7 +460,7 @@ export async function mountSpirit3D(root, players, options = {}) {
     createIdol(scene, [0, 0, -1.3], 1.25);
     flame(scene, -1.5, 0.42, -0.4);
     flame(scene, 1.5, 0.42, -0.4);
-  } else {
+  } else if (mode === "challenge") {
     const type = options.challengeType || "race";
     for (let i = 0; i < 7; i++) {
       const x = -6 + i * 2;
@@ -360,7 +541,7 @@ export async function mountSpirit3D(root, players, options = {}) {
       a.position.set((col - (cols - 1) / 2) * 1.55, 0, row * 1.7 + 2.1);
       a.scale.setScalar(players.length > 16 ? 0.58 : 0.7);
       a.userData.home = a.position.clone();
-      a.userData.action = "run";
+      a.userData.action = mode === "challenge" ? "run" : "idle";
     }
   }
 
@@ -444,6 +625,27 @@ export async function mountSpirit3D(root, players, options = {}) {
         r.leftArm.rotation.x = -0.8 + Math.sin(phase) * 0.3;
         r.rightArm.rotation.x = -0.8 - Math.sin(phase) * 0.3;
         r.head.rotation.x = 0.18;
+      } else if (a.userData.action === "dig") {
+        r.leftArm.rotation.x = -1.1 + Math.sin(phase * 1.8) * 0.72;
+        r.rightArm.rotation.x = -1.1 + Math.sin(phase * 1.8) * 0.72;
+        a.rotation.x = 0.12 + Math.abs(Math.sin(phase)) * 0.08;
+      } else if (a.userData.action === "fish") {
+        r.leftArm.rotation.x = -1.28;
+        r.rightArm.rotation.x = -1.18 + Math.sin(phase * 0.9) * 0.18;
+        r.leftArm.rotation.z = 0.42;
+        a.rotation.z = Math.sin(phase * 0.55) * 0.035;
+      } else if (a.userData.action === "search") {
+        r.rightArm.rotation.z = -0.9 + Math.sin(phase * 1.2) * 0.42;
+        r.leftArm.rotation.z = 0.55 - Math.cos(phase) * 0.22;
+        r.head.rotation.y = Math.sin(phase * 0.45) * 0.55;
+      } else if (a.userData.action === "dive") {
+        r.leftArm.rotation.z = 1.5;
+        r.rightArm.rotation.z = -1.5;
+        a.position.y = -0.45 + Math.sin(phase) * 0.15;
+      } else if (a.userData.action === "fight") {
+        r.leftArm.rotation.x = -0.75 + Math.sin(phase * 2.4) * 0.8;
+        r.rightArm.rotation.x = -0.75 - Math.sin(phase * 2.4) * 0.8;
+        a.rotation.z = Math.sin(phase * 1.2) * 0.08;
       } else {
         a.position.y = Math.sin(phase * 0.35) * 0.025;
       }
@@ -543,6 +745,119 @@ export async function mountSpirit3D(root, players, options = {}) {
         a.userData.action = winnerSet.has(id) ? "celebrate" : "idle";
       });
     },
+    async search(id, method = "dig") {
+      const a = avatarMap.get(id);
+      if (!a) return;
+      const props = new THREE.Group();
+      scene.add(props);
+      const origin = a.position.clone();
+      const sand = material(0xb8864c, 0.95, 0.01),
+        wood = material(0x6f4429, 0.9, 0.02),
+        water = new THREE.MeshBasicMaterial({
+          color: 0x34d9e8,
+          transparent: true,
+          opacity: 0.58,
+        });
+      if (method === "dig") {
+        const mound = mesh(
+          new THREE.SphereGeometry(0.82, 24, 12),
+          sand,
+          props,
+          [origin.x + 0.4, 0.02, origin.z - 1.15],
+        );
+        mound.scale.y = 0.22;
+        const handle = mesh(
+          new THREE.CylinderGeometry(0.035, 0.035, 1.7, 8),
+          wood,
+          props,
+          [origin.x + 0.75, 0.82, origin.z - 0.8],
+        );
+        handle.rotation.z = -0.42;
+        a.userData.action = "dig";
+      } else if (method === "fish" || method === "dive") {
+        for (let i = 0; i < 4; i++) {
+          const ring = mesh(
+            new THREE.RingGeometry(0.55 + i * 0.38, 0.59 + i * 0.38, 42),
+            water,
+            props,
+            [origin.x, 0.05, origin.z - 1.6],
+          );
+          ring.rotation.x = -Math.PI / 2;
+          ring.userData.challengePiece = true;
+        }
+        if (method === "fish") {
+          const pole = mesh(
+            new THREE.CylinderGeometry(0.025, 0.04, 2.8, 8),
+            wood,
+            props,
+            [origin.x + 0.42, 1.55, origin.z - 0.72],
+          );
+          pole.rotation.z = -0.5;
+          a.userData.action = "fish";
+        } else a.userData.action = "dive";
+      } else {
+        const stone = material(0x465653, 0.96, 0.04);
+        for (let i = 0; i < 5; i++) {
+          const relic = mesh(
+            method === "jungle"
+              ? new THREE.CylinderGeometry(0.09, 0.14, 2.2 + (i % 2), 8)
+              : new THREE.BoxGeometry(0.7 + (i % 2) * 0.35, 0.55, 0.7),
+            method === "jungle" ? material(0x245d35, 0.9) : stone,
+            props,
+            [origin.x - 2 + i, 0.3, origin.z - 1.5 - (i % 2) * 0.35],
+          );
+          relic.rotation.z = method === "jungle" ? (i - 2) * 0.15 : 0;
+        }
+        a.userData.action = "search";
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2900));
+      a.userData.action = "celebrate";
+      props.visible = false;
+    },
+    async confront(firstId, secondId) {
+      const a = avatarMap.get(firstId),
+        b = avatarMap.get(secondId);
+      if (!a || !b) return;
+      const ah = a.userData.home.clone(),
+        bh = b.userData.home.clone();
+      await Promise.all([
+        moveTo(firstId, new THREE.Vector3(-0.8, 0, 1.2), "fight", 700),
+        moveTo(secondId, new THREE.Vector3(0.8, 0, 1.2), "fight", 700),
+      ]);
+      a.rotation.y = Math.PI / 2;
+      b.rotation.y = -Math.PI / 2;
+      a.userData.action = "fight";
+      b.userData.action = "fight";
+      await new Promise((resolve) => setTimeout(resolve, 1900));
+      await Promise.all([
+        moveTo(firstId, ah, "walk", 720),
+        moveTo(secondId, bh, "walk", 720),
+      ]);
+      a.userData.action = "idle";
+      b.userData.action = "idle";
+    },
+    async duel(firstId, secondId, survivorId) {
+      const a = avatarMap.get(firstId),
+        b = avatarMap.get(secondId);
+      if (!a || !b) return;
+      await Promise.all([
+        moveTo(firstId, new THREE.Vector3(-1.25, 0, 0.5), "run", 850),
+        moveTo(secondId, new THREE.Vector3(1.25, 0, 0.5), "run", 850),
+      ]);
+      a.rotation.y = Math.PI / 2;
+      b.rotation.y = -Math.PI / 2;
+      a.userData.action = "fight";
+      b.userData.action = "fight";
+      flame(scene, -0.45, 0.45, -0.15, 0x31e7ff);
+      flame(scene, 0.45, 0.45, -0.15, 0xff794f);
+      await new Promise((resolve) => setTimeout(resolve, 2600));
+      const winner = avatarMap.get(survivorId),
+        loser = survivorId === firstId ? b : a;
+      winner.userData.action = "celebrate";
+      loser.userData.action = "idle";
+      loser.rotation.z = survivorId === firstId ? 1.15 : -1.15;
+      loser.position.y = -0.45;
+    },
     celebrate(ids = []) {
       ids.forEach((id) => {
         const a = avatarMap.get(id);
@@ -561,13 +876,20 @@ export async function mountSpirit3D(root, players, options = {}) {
       await moveTo(id, new THREE.Vector3(7.8, 0, 7.4), "exit", 2600);
       a.visible = false;
     },
-    idolBurst(id) {
+    idolBurst(id, type = "flame") {
       const a = avatarMap.get(id);
       if (!a) return;
-      const idol = createIdol(a, [0, 2.1, 0.8], 0.72);
+      const idol = createIdol(a, [0, 2.1, 0.8], 0.72, type);
       idol.userData.burst = true;
       a.userData.action = "celebrate";
-      const light = new THREE.PointLight(0xffd34e, 9, 11);
+      const colors = {
+          flame: 0xffd34e,
+          mirror: 0xc9f4ff,
+          storm: 0x3e7bff,
+          twin: 0xff5da8,
+          oracle: 0x9b5cff,
+        },
+        light = new THREE.PointLight(colors[type] || colors.flame, 9, 11);
       light.position.copy(a.position).add(new THREE.Vector3(0, 2.2, 1));
       scene.add(light);
       setTimeout(() => {

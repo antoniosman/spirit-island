@@ -1,6 +1,6 @@
 import { createGame, step, pairKey } from "./engine.js";
 import { mountSpirit3D } from "./cinema3d.js";
-const VERSION = "2026.09.16.2",
+const VERSION = "2026.09.16.4",
   files = [
     "Alex.webp",
     "Billy.webp",
@@ -313,7 +313,7 @@ function eventView(e, g) {
           : e.dialogue
             ? "ΣΥΖΗΤΗΣΕΙΣ"
             : stageName(e.stage).toUpperCase();
-  return `<section class="episode ${e.idolPlayed || e.idol ? "idol-event" : ""}"><span>EPISODE ${e.episode} · ${esc(category)}</span><h2>${esc(e.title)}</h2><div class="faces">${e.ids.map((id) => (get(id) ? `<img src="${get(id).image}" title="${esc(get(id).name)}">` : "")).join("")}</div><p>${esc(e.text)}</p>${e.idolPlays?.length ? `<div class="idol-play-list">${e.idolPlays.map((x) => `◆ ${esc(get(x.actor)?.name)} σώζει ${esc(get(x.saved)?.name)}`).join("<br>")}</div>` : ""}${e.votes ? `<details open><summary>Ποιος ψήφισε ποιον</summary>${e.votes.map((v) => `<div class="vote-row"><span>${esc(get(v.voter)?.name)}</span><b>→</b><span>${esc(get(v.target)?.name)}</span></div>`).join("")}</details>` : ""}</section>`;
+  return `<section class="episode ${e.idolPlayed || e.idol ? "idol-event" : ""}"><span>EPISODE ${e.episode} · ${esc(category)}</span><h2>${esc(e.title)}</h2><div class="faces">${e.ids.map((id) => (get(id) ? `<img src="${get(id).image}" title="${esc(get(id).name)}">` : "")).join("")}</div><p>${esc(e.text)}</p>${e.idol ? `<div class="idol-type-card"><b>◆ ${esc(e.idolName || "Κρυμμένο Idol")}</b><small>${esc(e.idolEffect || "Μυστική δύναμη")}</small></div>` : ""}${e.idolPlays?.length ? `<div class="idol-play-list">${e.idolPlays.map((x) => `◆ <b>${esc(x.name || "Idol")}</b> · ${esc(get(x.actor)?.name)}${x.redirectedTo ? ` στρέφει τις ψήφους στον/στην ${esc(get(x.redirectedTo)?.name)}` : ` προστατεύει τον/την ${esc(get(x.saved)?.name)}`}`).join("<br>")}</div>` : ""}${e.tieResolution ? `<div class="tie-card">⚡ ${esc(e.tieResolution.title)}</div>` : ""}${e.votes ? `<details open><summary>Ποιος ψήφισε ποιον</summary>${e.votes.map((v) => `<div class="vote-row"><span>${esc(get(v.voter)?.name)}${v.bonus ? " · BONUS" : ""}</span><b>→</b><span>${esc(get(v.target)?.name)}</span></div>`).join("")}</details>` : ""}</section>`;
 }
 function historyView(g) {
   const episodes = [...new Set(g.history.map((e) => e.episode))].reverse();
@@ -358,17 +358,24 @@ function rankingView(g) {
     );
   }
   g.order.forEach((id, i) => rows.push({ id, place: g.players.length - i }));
-  if (!g.winner)
-    g.players
+  if (!g.winner) {
+    const active = g.players
       .filter((p) => !p.out)
-      .forEach((p) => rows.unshift({ id: p.id, place: "—" }));
+      .sort(
+        (a, b) =>
+          b.wins * 3 + b.strategy + b.social -
+            (a.wins * 3 + a.strategy + a.social) ||
+          a.name.localeCompare(b.name),
+      );
+    active.forEach((p, i) => rows.push({ id: p.id, place: i + 1, active: true }));
+  }
   const unique = rows.filter(
     (r, i) => rows.findIndex((x) => x.id === r.id) === i,
-  );
+  ).sort((a, b) => a.place - b.place);
   return `<section class="ranking"><h2>Κατάταξη σεζόν</h2>${unique
     .map((r) => {
       const p = get(r.id);
-      return `<div><b>${r.place === 1 ? "🏆" : r.place}.</b><img src="${p.image}"><span>${esc(p.name)}</span><small>${r.place === "—" ? "Ακόμα στο παιχνίδι" : r.place === 1 ? "Νικητής" : `Θέση ${r.place}`}</small></div>`;
+      return `<div class="${r.active ? "active-player" : ""}"><b>${g.winner && r.place === 1 ? "🏆" : r.place}.</b><img src="${p.image}"><span>${esc(p.name)}</span><small>${r.active ? `Προσωρινή θέση ${r.place} · ακόμα στο παιχνίδι` : r.place === 1 ? "Νικητής" : `Θέση ${r.place}`}</small></div>`;
     })
     .join("")}</section>`;
 }
@@ -560,7 +567,7 @@ async function intro() {
   if (!stop) finish();
 }
 async function councilReveal(e) {
-  if (!state.cinema || !e.evicted) return;
+  if (!state.cinema || !e?.council) return;
   const g = state.game,
     ov = document.createElement("div");
   ov.className = "council";
@@ -578,8 +585,9 @@ async function councilReveal(e) {
         ...e.safeOrder,
         ...(e.idolSaved ? [e.idolSaved] : []),
         ...(e.idolPlays || []).map((play) => play.actor),
-        e.evicted,
-        ...g.jury.filter((id) => id !== e.evicted),
+        ...(e.evictedIds || (e.evicted ? [e.evicted] : [])),
+        ...(e.tieResolution?.contestants || []),
+        ...g.jury.filter((id) => !(e.evictedIds || []).includes(id)),
       ]),
     ],
     participants = participantIds
@@ -591,7 +599,7 @@ async function councilReveal(e) {
       participants,
       {
         mode: "council",
-        jury: g.jury.filter((id) => id !== e.evicted),
+        jury: g.jury.filter((id) => !(e.evictedIds || []).includes(id)),
         colors,
       },
     );
@@ -605,6 +613,20 @@ async function councilReveal(e) {
     img.classList.add("visible");
     p.textContent = `“${line.text}”`;
     await wait(1900);
+  }
+  const confrontation = (e.councilDialogue || [])
+    .map((line) => g.players.find((x) => x.name === line.speaker)?.id)
+    .filter(Boolean)
+    .slice(0, 2);
+  if (!skipped && confrontation.length === 2) {
+    const [a, b] = confrontation.map((id) => g.players.find((x) => x.id === id));
+    h.textContent = "Η ένταση ξεφεύγει στο Συμβούλιο!";
+    img.src = a.image;
+    p.textContent = `${a.name} και ${b.name} σηκώνονται, ανταλλάσσουν βαριές κουβέντες και οι υπόλοιποι μπαίνουν ανάμεσά τους.`;
+    ov.classList.add("council-clash");
+    await stage.confront(a.id, b.id);
+    ov.classList.remove("council-clash");
+    await wait(700);
   }
   for (const vote of e.votes) {
     if (skipped) break;
@@ -641,24 +663,65 @@ async function councilReveal(e) {
     p.textContent = "Η φλόγα ετοιμάζεται να σβήσει.";
     await wait(1800);
     ov.classList.add("idol-twist");
-    stage.idolBurst(actor.id);
-    h.textContent = `${idolIndex ? "ΚΙ ΑΛΛΟ IDOL!" : "Μισό λεπτό — έχει γίνει κάποιο λάθος!"}`;
+    stage.idolBurst(actor.id, play.type);
+    h.textContent = `${idolIndex ? "ΚΙ ΑΛΛΟ RELIC!" : "Μισό λεπτό — έχει γίνει κάποιο λάθος!"}`;
     img.src = actor.image;
-    p.innerHTML = `◆ ${esc(actor.name)} ΕΚΑΝΕ ΧΡΗΣΗ IDOL<br>${esc(saved.name)}, η φλόγα σου παραμένει αναμμένη.`;
+    p.innerHTML = `◆ ${esc(play.name || "IDOL")}<br>${esc(actor.name)} ενεργοποιεί τη δύναμή του: ${esc(play.effect || "οι ψήφοι αλλάζουν")}${play.redirectedTo ? `<br>Οι ψήφοι στρέφονται στον/στην ${esc(g.players.find((x) => x.id === play.redirectedTo)?.name)}.` : `<br>${esc(saved.name)}, η φλόγα σου παραμένει αναμμένη.`}`;
     await wait(3600);
     ov.classList.remove("idol-twist");
     h.textContent = "Οι ψήφοι του Idol ακυρώθηκαν. Αποχωρεί ο επόμενος…";
     p.textContent = "Το Συμβούλιο αλλάζει απόφαση.";
     await wait(1800);
   }
-  const out = g.players.find((q) => q.id === e.evicted);
-  h.textContent = out.name;
-  img.src = out.image;
-  p.textContent = `Η φλόγα σου σβήνει · Θέση ${e.place}`;
-  await wait(1200);
-  h.textContent = `${out.name}, πάρε τη δάδα σου`;
-  p.textContent = `Αποχωρεί από το νησί και παίρνει τη θέση ${e.place}.`;
-  await stage.exit(out.id);
+  if (e.tieResolution) {
+    const tied = e.tieResolution.contestants.map((id) =>
+      g.players.find((x) => x.id === id),
+    );
+    ov.classList.add("tie-night");
+    h.textContent = "ΙΣΟΨΗΦΙΑ — ΤΟ ΝΗΣΙ ΑΠΟΦΑΣΙΖΕΙ";
+    img.src = tied[0].image;
+    p.textContent =
+      e.tieResolution.type === "duel"
+        ? `${tied[0].name} και ${tied[1].name} οδηγούνται στη Μονομαχία της Φωτιάς.`
+        : e.tieResolution.type === "doubleOut"
+          ? "Η ανατροπή είναι αμείλικτη: και οι δύο φλόγες κινδυνεύουν."
+          : "Η ισοψηφία ενεργοποιεί το έλεος των Πνευμάτων.";
+    if (e.tieResolution.type === "duel") {
+      await stage.duel(
+        tied[0].id,
+        tied[1].id,
+        e.tieResolution.survivor,
+      );
+      const survivor = g.players.find((x) => x.id === e.tieResolution.survivor);
+      h.textContent = `${survivor.name} κερδίζει τη μονομαχία!`;
+      img.src = survivor.image;
+      p.textContent = "Η φλόγα του/της παραμένει αναμμένη.";
+    } else if (e.tieResolution.type === "bothStay") {
+      stage.celebrate(tied.map((x) => x.id));
+      h.textContent = "ΠΑΡΑΜΕΝΟΥΝ ΚΑΙ ΟΙ ΔΥΟ!";
+      p.textContent = "Καμία φλόγα δεν σβήνει απόψε.";
+    } else {
+      h.textContent = "ΔΙΠΛΗ ΑΠΟΧΩΡΗΣΗ";
+      p.textContent = "Το Συμβούλιο χάνει δύο παίκτες την ίδια νύχτα.";
+    }
+    await wait(2600);
+    ov.classList.remove("tie-night");
+  }
+  for (const eviction of e.evictions || []) {
+    const out = g.players.find((q) => q.id === eviction.id);
+    h.textContent = out.name;
+    img.src = out.image;
+    p.textContent = `Η φλόγα σου σβήνει · Θέση ${eviction.place}`;
+    await wait(1200);
+    h.textContent = `${out.name}, πάρε τη δάδα σου`;
+    p.textContent = `Αποχωρεί από το νησί και παίρνει τη θέση ${eviction.place}.`;
+    await stage.exit(out.id);
+  }
+  if (!(e.evictions || []).length) {
+    h.textContent = "Το Συμβούλιο ολοκληρώθηκε";
+    p.textContent = "Όλοι επιστρέφουν στην παραλία. Το παιχνίδι συνεχίζεται.";
+    await wait(1600);
+  }
   await wait(650);
   stage.dispose();
   ov.remove();
@@ -751,23 +814,42 @@ async function idolDiscoveryScene(e) {
     ov = document.createElement("div");
   if (!finder) return;
   ov.className = "idol-discovery";
-  ov.innerHTML = `<div class="idol-stage3d"></div><div class="idol-discovery-hud"><span>SECRET SCENE</span><h1>ΕΝΑ IDOL ΞΥΠΝΗΣΕ</h1><p>${esc(finder.name)} ανακάλυψε ένα κρυμμένο φυλαχτό.</p></div><button>Συνέχεια</button>`;
+  const searchCopy = {
+    dig: "σκάβει κάτω από την καυτή άμμο",
+    fish: "ψαρεύει δίπλα στον ύφαλο",
+    ruins: "ερευνά τα αρχαία ερείπια",
+    jungle: "κόβει τα πυκνά κλήματα της ζούγκλας",
+    dive: "βουτά στα σκοτεινά νερά του όρμου",
+  };
+  ov.dataset.idol = e.idolType || "flame";
+  ov.innerHTML = `<div class="idol-stage3d"></div><div class="idol-discovery-hud"><span>SECRET ISLAND CAM · LIVE</span><h1>Η ΑΝΑΖΗΤΗΣΗ ΑΡΧΙΖΕΙ</h1><p>${esc(finder.name)} ${esc(searchCopy[e.searchMethod] || "ψάχνει ένα κρυμμένο μονοπάτι")}…</p></div><button>Παράλειψη</button>`;
   document.body.append(ov);
   const stage = await mountSpirit3D(
     ov.querySelector(".idol-stage3d"),
     [finder],
     {
-      mode: "council",
+      mode: "discovery",
     },
   );
-  stage.idolBurst(finder.id);
-  await new Promise((resolve) => {
-    const timer = setTimeout(resolve, 4200);
-    ov.querySelector("button").onclick = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-  });
+  let skipped = false,
+    skipResolve;
+  const skipPromise = new Promise((resolve) => (skipResolve = resolve));
+  ov.querySelector("button").onclick = () => {
+    skipped = true;
+    skipResolve();
+  };
+  await Promise.race([
+    stage.search(finder.id, e.searchMethod || "dig"),
+    skipPromise,
+  ]);
+  if (!skipped) {
+    const hud = ov.querySelector(".idol-discovery-hud");
+    hud.querySelector("h1").textContent = e.idolName || "ΕΝΑ IDOL ΞΥΠΝΗΣΕ";
+    hud.querySelector("p").textContent = e.idolEffect || "Μια νέα δύναμη μπαίνει στο παιχνίδι.";
+    ov.classList.add("idol-found");
+    stage.idolBurst(finder.id, e.idolType);
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+  }
   stage.dispose();
   ov.remove();
 }
@@ -949,7 +1031,7 @@ async function action(a) {
       }
       save();
       render();
-      if (e?.evicted) await councilReveal(e);
+      if (e?.council) await councilReveal(e);
       else if (e?.final) await finalReveal(e);
       else if (e?.merge) {
         await mergeReveal(e);
