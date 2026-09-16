@@ -206,6 +206,12 @@ export function step(s, rng = Math.random) {
         { type: "endurance", name: "Στύλοι της Παλίρροιας" },
         { type: "memory", name: "Μνήμη των Κρυστάλλων" },
         { type: "totem", name: "Κυνήγι των Τοτέμ" },
+        { type: "raft", name: "Σχεδία της Τρικυμίας" },
+        { type: "archery", name: "Βέλη του Ορίζοντα" },
+        { type: "climb", name: "Πύργος του Ανέμου" },
+        { type: "maze", name: "Λαβύρινθος της Ζούγκλας" },
+        { type: "spear", name: "Δόρατα στην Παλίρροια" },
+        { type: "fire", name: "Ναός της Φωτιάς" },
       ],
       challenge = challenges[(s.episode - 1) % challenges.length];
     if (!s.merge) {
@@ -331,6 +337,7 @@ export function step(s, rng = Math.random) {
         {
           cliqueBroken: clique.id,
           dialogue: ids.slice(0, 2).map((id, i) => ({
+            speakerId: id,
             speaker: name(id),
             text: i ? "Η συμφωνία τελείωσε." : "Κάποιος μας πρόδωσε.",
           })),
@@ -355,6 +362,7 @@ export function step(s, rng = Math.random) {
         {
           cliqueCreated: clique.id,
           dialogue: members.slice(0, 3).map((p, i) => ({
+            speakerId: p.id,
             speaker: p.name,
             text:
               i === 0
@@ -382,7 +390,58 @@ export function step(s, rng = Math.random) {
         (p) => p.id !== a.id && (s.merge || p.tribe === a.tribe),
       ),
       b = possibleB[Math.floor(rng() * possibleB.length)],
-      witness = alive
+      conflictKey = pairKey(a.id, b.id);
+    if (
+      alive.length > 4 &&
+      rng() < 0.035 &&
+      (s.bonds[conflictKey] || 0) <= 0
+    ) {
+      const attacker = a.strategy + a.competition >= b.strategy + b.competition ? a : b,
+        target = attacker.id === a.id ? b : a,
+        attackTypes = ["spirit-pistol", "magic-blast", "duel-strike"],
+        attackType = attackTypes[Math.floor(rng() * attackTypes.length)],
+        place = s.players.length - s.order.length;
+      target.out = true;
+      s.order.push(target.id);
+      if (s.merge) s.jury.push(target.id);
+      s.individualImmune = null;
+      s.safeTribe = null;
+      const result = event(
+        "ΕΚΤΑΚΤΟ · Η σύγκρουση ξεφεύγει",
+        attackType === "spirit-pistol"
+          ? `${attacker.name} τραβά το καταραμένο όπλο των Πνευμάτων. Μια εκτυφλωτική βολή πετυχαίνει τον/την ${target.name}, που βγαίνει αμέσως από το παιχνίδι στη θέση ${place}.`
+          : attackType === "magic-blast"
+            ? `${attacker.name} εξαπολύει μια απαγορευμένη μαγική επίθεση. Ο/Η ${target.name} απομακρύνεται οριστικά από το νησί στη θέση ${place}.`
+            : `${attacker.name} και ${target.name} οδηγούνται σε άγρια μονομαχία. Ο/Η ${target.name} χάνει και βγαίνει από το παιχνίδι στη θέση ${place}.`,
+        [attacker.id, target.id],
+        {
+          attackElimination: true,
+          attacker: attacker.id,
+          target: target.id,
+          attackType,
+          evicted: target.id,
+          evictedIds: [target.id],
+          evictions: [{ id: target.id, place }],
+          place,
+          dialogue: [
+            {
+              speakerId: attacker.id,
+              speaker: attacker.name,
+              text: "Σου είπα να μη με προκαλέσεις. Αυτή η ιστορία τελειώνει τώρα.",
+            },
+            {
+              speakerId: target.id,
+              speaker: target.name,
+              text: "Δεν θα με τρομάξεις. Κάνε ό,τι νομίζεις.",
+            },
+          ],
+        },
+      );
+      s.stage = "challenge";
+      s.episode++;
+      return result;
+    }
+    const witness = alive
         .filter((p) => p.id !== a.id && p.id !== b.id)
         .sort((x, y) => y.strategy - x.strategy)[0],
       k = pairKey(a.id, b.id),
@@ -398,15 +457,18 @@ export function step(s, rng = Math.random) {
       {
         dialogue: [
           {
+            speakerId: a.id,
             speaker: a.name,
             text: delta > 0 ? "Μέχρι το τέλος μαζί." : "Δεν σε εμπιστεύομαι.",
           },
           {
+            speakerId: b.id,
             speaker: b.name,
             text:
               delta > 0 ? "Κανείς δεν θα το μάθει." : "Θα γράψω το όνομά σου.",
           },
           witness && {
+            speakerId: witness.id,
             speaker: witness.name,
             text:
               delta > 0
@@ -512,6 +574,7 @@ export function step(s, rng = Math.random) {
         .sort((a, b) => b.strategy + b.social - (a.strategy + a.social))[0],
       councilDialogue = [
         accuser && {
+          speakerId: accuser.id,
           speaker: accuser.name,
           text:
             accuser.strategy >= 7
@@ -521,6 +584,7 @@ export function step(s, rng = Math.random) {
                 : "Στο νησί επιβιώνεις μόνο όταν παίρνεις δύσκολες αποφάσεις.",
         },
         target && {
+          speakerId: target.id,
           speaker: target.name,
           text:
             target.strategy >= 7
@@ -530,6 +594,7 @@ export function step(s, rng = Math.random) {
                 : "Δεν ήρθα μέχρι εδώ για να παραδώσω τη φλόγα μου χωρίς μάχη.",
         },
         observer && {
+          speakerId: observer.id,
           speaker: observer.name,
           text: s.cliques.some(
             (c) =>

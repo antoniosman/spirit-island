@@ -993,6 +993,30 @@ select {
   color: white;
   font-size: clamp(18px, 3vw, 28px);
 }
+.attack-scene:before {
+  filter: brightness(0.16) saturate(1.3) hue-rotate(-22deg);
+}
+.attack-scene .council-hud {
+  border-color: #ff665f88;
+  background: linear-gradient(120deg, #200507e8, #071a1ddb);
+  box-shadow: 0 0 65px #ff301e38;
+}
+.attack-scene .council-hud > span {
+  color: #ff5148;
+  animation: emergencyBlink 0.7s steps(2) infinite;
+}
+.attack-impact:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 55%, #fff 0 2%, #ff5a2baa 4%, transparent 20%),
+    linear-gradient(120deg, transparent 43%, #ffdf9caa 49%, transparent 54%);
+  mix-blend-mode: screen;
+  animation: impactFlash 0.55s steps(2) 3;
+}
 .top-board,
 .announcement,
 .finale-scene,
@@ -1253,6 +1277,12 @@ dialog::backdrop {
 }
 @keyframes relicSpin {
   to { transform: rotate(360deg); }
+}
+@keyframes emergencyBlink {
+  50% { opacity: 0.32; }
+}
+@keyframes impactFlash {
+  50% { opacity: 0.08; transform: scale(1.08); }
 }
 @media (max-width: 760px) {
   header {

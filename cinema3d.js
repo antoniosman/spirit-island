@@ -2,6 +2,15 @@ import * as THREE from "./vendor/three.module.min.js";
 
 const TAU = Math.PI * 2;
 
+function loadTexture(url, timeout = 4500) {
+  return Promise.race([
+    new THREE.TextureLoader().loadAsync(url),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Texture timeout: ${url}`)), timeout),
+    ),
+  ]);
+}
+
 function material(color, roughness = 0.72, metalness = 0.08) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
@@ -28,9 +37,9 @@ function limb(radius, length, mat, parent, x, y, z) {
   return { pivot, part };
 }
 
-async function portraitMaterial(url, prepared = false) {
+async function portraitMaterial(url, prepared = false, fallbackUrl = null) {
   try {
-    const texture = await new THREE.TextureLoader().loadAsync(url);
+    const texture = await loadTexture(url);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.center.set(0.5, 0.5);
     if (prepared) {
@@ -55,7 +64,61 @@ async function portraitMaterial(url, prepared = false) {
       side: THREE.DoubleSide,
     });
   } catch {
+    if (fallbackUrl && fallbackUrl !== url)
+      return portraitMaterial(fallbackUrl, false, null);
     return new THREE.MeshBasicMaterial({ color: 0x6ddbc8 });
+  }
+}
+
+async function cutoutMaterial(url, fallbackUrl = null) {
+  try {
+    const source = await loadTexture(url),
+      image = source.image,
+      canvas = document.createElement("canvas"),
+      width = 256,
+      height = 448;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d"),
+      imageWidth = image.naturalWidth || image.width || width,
+      imageHeight = image.naturalHeight || image.height || height,
+      targetRatio = width / height,
+      sourceRatio = imageWidth / imageHeight;
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(8, 5, width - 16, height - 10, 112);
+    ctx.clip();
+    if (sourceRatio > targetRatio) {
+      const cropWidth = imageHeight * targetRatio,
+        cropX = (imageWidth - cropWidth) / 2;
+      ctx.drawImage(image, cropX, 0, cropWidth, imageHeight, 0, 0, width, height);
+    } else {
+      const cropHeight = imageWidth / targetRatio,
+        cropY = Math.max(0, (imageHeight - cropHeight) * 0.22);
+      ctx.drawImage(image, 0, cropY, imageWidth, cropHeight, 0, 0, width, height);
+    }
+    const gradient = ctx.createLinearGradient(0, height * 0.62, 0, height);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(1, "rgba(255,255,255,.18)");
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    source.dispose();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 8;
+    return new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      alphaTest: 0.04,
+      side: THREE.DoubleSide,
+    });
+  } catch {
+    if (fallbackUrl && fallbackUrl !== url)
+      return cutoutMaterial(fallbackUrl, null);
+    return new THREE.MeshBasicMaterial({ color: 0x4b8f87, transparent: true, opacity: 0.8 });
   }
 }
 
@@ -211,6 +274,14 @@ async function avatar(player, color = "#43d9c2") {
     group,
     [0, 1.98, 0],
   );
+  const portraitCutout = mesh(
+    new THREE.PlaneGeometry(1.05, 1.88),
+    await cutoutMaterial(player.image, player.faceImage),
+    group,
+    [0, 1.58, 0.36],
+  );
+  portraitCutout.renderOrder = 2;
+  portraitCutout.userData.cutout = true;
   const head = new THREE.Group();
   head.position.set(0, 2.58, 0);
   group.add(head);
@@ -220,6 +291,7 @@ async function avatar(player, color = "#43d9c2") {
     await portraitMaterial(
       player.faceImage || player.image,
       !!player.faceImage,
+      player.image,
     ),
     head,
     [0, 0.015, 0.43],
@@ -402,6 +474,124 @@ function labelSprite(text, color = "#ffffff") {
   return sprite;
 }
 
+function createHost(parent) {
+  const host = new THREE.Group(),
+    suit = material(0x101820, 0.45, 0.45),
+    shirt = material(0xe9e0c7, 0.62, 0.05),
+    skin = material(0xb77755, 0.75, 0.03),
+    gold = material(0xd6a844, 0.25, 0.8);
+  parent.add(host);
+  mesh(new THREE.CapsuleGeometry(0.4, 1.06, 6, 14), suit, host, [0, 1.62, 0]);
+  mesh(new THREE.BoxGeometry(0.18, 0.72, 0.08), shirt, host, [0, 1.67, 0.38]);
+  const head = mesh(new THREE.SphereGeometry(0.38, 20, 14), skin, host, [0, 2.62, 0]);
+  const hair = mesh(new THREE.SphereGeometry(0.4, 18, 10, 0, TAU, 0, Math.PI * 0.5), suit, host, [0, 2.75, -0.02]);
+  const leftArm = limb(0.11, 0.94, suit, host, -0.48, 1.98, 0),
+    rightArm = limb(0.11, 0.94, suit, host, 0.48, 1.98, 0),
+    badge = mesh(new THREE.OctahedronGeometry(0.11, 0), gold, host, [0, 1.68, 0.47]);
+  badge.rotation.z = Math.PI / 4;
+  const label = labelSprite("HOST", "#ffd46b");
+  label.position.set(0, 3.3, 0);
+  host.add(label);
+  host.userData.rig = {
+    head,
+    leftArm: leftArm.pivot,
+    rightArm: rightArm.pivot,
+  };
+  host.userData.action = "present";
+  host.position.set(0, 0, -2.05);
+  host.scale.setScalar(0.92);
+  return host;
+}
+
+function voteCard(name) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 768;
+  canvas.height = 480;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#e7dcc0";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#493621";
+  ctx.lineWidth = 24;
+  ctx.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+  ctx.fillStyle = "#17252a";
+  ctx.font = "900 76px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2, canvas.width - 90);
+  ctx.font = "700 24px sans-serif";
+  ctx.fillText("SPIRIT ISLAND · TRIBAL COUNCIL", canvas.width / 2, canvas.height - 62);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(1.75, 1.08),
+    new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }),
+  );
+}
+
+function decorateIsland(scene, mode) {
+  if (mode !== "camp" && mode !== "discovery") return;
+  const water = mesh(
+    new THREE.CircleGeometry(34, 64),
+    new THREE.MeshStandardMaterial({
+      color: 0x087c8a,
+      roughness: 0.25,
+      metalness: 0.18,
+      transparent: true,
+      opacity: 0.72,
+    }),
+    scene,
+    [0, -0.54, -2],
+  );
+  water.rotation.x = -Math.PI / 2;
+  water.userData.water = true;
+  const sand = mesh(
+    new THREE.CylinderGeometry(9.4, 10.2, 0.28, 28),
+    material(0xb99155, 0.95, 0.01),
+    scene,
+    [0, -0.38, 0],
+  );
+  sand.scale.z = 0.68;
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * TAU,
+      x = Math.cos(angle) * (6.3 + (i % 2)),
+      z = Math.sin(angle) * 4.2 - 0.8,
+      trunk = mesh(
+        new THREE.CylinderGeometry(0.12, 0.23, 3.1, 9),
+        material(0x6d4325, 0.95),
+        scene,
+        [x, 1.1, z],
+      );
+    trunk.rotation.z = Math.sin(i * 2) * 0.18;
+    for (let j = 0; j < 5; j++) {
+      const leaf = mesh(
+        new THREE.ConeGeometry(0.22, 2.25, 5),
+        material(0x1c713f, 0.8),
+        scene,
+        [x + Math.cos((j / 5) * TAU) * 0.55, 2.82, z + Math.sin((j / 5) * TAU) * 0.55],
+      );
+      leaf.rotation.z = Math.PI / 2;
+      leaf.rotation.y = (j / 5) * TAU;
+    }
+  }
+  const shelter = new THREE.Group();
+  shelter.position.set(-4.3, 0, -1.8);
+  scene.add(shelter);
+  for (const side of [-1, 1]) {
+    const roof = mesh(new THREE.BoxGeometry(3.6, 0.12, 2.3), material(0x5b3a22, 0.95), shelter, [0, 1.65, side * 0.72]);
+    roof.rotation.x = side * 0.62;
+  }
+  flame(scene, 0, 0.45, -0.4, 0xff7a23);
+  for (let i = 0; i < 10; i++) {
+    const rock = mesh(
+      new THREE.DodecahedronGeometry(0.22 + (i % 3) * 0.08, 0),
+      material(i % 2 ? 0x43574e : 0x6d6858, 0.96),
+      scene,
+      [Math.sin(i * 2.4) * 7.2, 0.05, Math.cos(i * 1.7) * 3.8],
+    );
+    rock.rotation.set(i, i * 0.4, 0);
+  }
+}
+
 export async function mountSpirit3D(root, players, options = {}) {
   const mode = options.mode || "council";
   const scene = new THREE.Scene();
@@ -412,8 +602,8 @@ export async function mountSpirit3D(root, players, options = {}) {
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
   camera.position.set(
     0,
-    mode === "challenge" ? 5.8 : 6.2,
-    mode === "challenge" ? 16.8 : 15.5,
+    mode === "challenge" ? 5.8 : mode === "camp" || mode === "discovery" ? 4.7 : 6.2,
+    mode === "challenge" ? 16.8 : mode === "camp" || mode === "discovery" ? 14.2 : 15.5,
   );
   camera.lookAt(0, 1.3, 0);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -425,7 +615,7 @@ export async function mountSpirit3D(root, players, options = {}) {
   root.append(renderer.domElement);
 
   try {
-    const backdrop = await new THREE.TextureLoader().loadAsync(
+    const backdrop = await loadTexture(
       options.background ||
         (mode === "council" ? "council-stage.png" : "island-hero.png"),
     );
@@ -448,13 +638,23 @@ export async function mountSpirit3D(root, players, options = {}) {
 
   const floor = mesh(
     new THREE.CylinderGeometry(mode === "challenge" ? 10 : 8, 8.6, 0.45, 64),
-    material(mode === "challenge" ? 0x386654 : 0x18252a, 0.92, 0.03),
+    material(
+      mode === "challenge"
+        ? 0x386654
+        : mode === "camp" || mode === "discovery"
+          ? 0x51764f
+          : 0x18252a,
+      0.92,
+      0.03,
+    ),
     scene,
     [0, -0.28, 0],
   );
   floor.receiveShadow = true;
   const avatarMap = new Map();
   const colors = options.colors || {};
+  decorateIsland(scene, mode);
+  const host = mode === "council" ? createHost(scene) : null;
 
   if (mode === "council") {
     createIdol(scene, [0, 0, -1.3], 1.25);
@@ -493,6 +693,46 @@ export async function mountSpirit3D(root, players, options = {}) {
         );
         crystal.userData.challengePiece = true;
         altar.receiveShadow = true;
+      } else if (["archery", "spear"].includes(type)) {
+        const target = mesh(
+          new THREE.CylinderGeometry(0.62, 0.62, 0.12, 24),
+          material(i % 2 ? 0xffdf73 : 0xef5b43, 0.5, 0.22),
+          scene,
+          [x, 1.18, -2.1],
+        );
+        target.rotation.x = Math.PI / 2;
+        target.userData.target = true;
+      } else if (type === "climb") {
+        mesh(
+          new THREE.CylinderGeometry(0.3, 0.48, 4.5, 12),
+          material(i % 2 ? 0x755336 : 0x42625c, 0.9),
+          scene,
+          [x, 1.9, -1.4],
+        );
+      } else if (type === "raft") {
+        const raft = mesh(
+          new THREE.BoxGeometry(1.25, 0.18, 2.4),
+          material(0x8b5b2d, 0.92),
+          scene,
+          [x, 0.08, -1.4],
+        );
+        raft.userData.raft = true;
+      } else if (type === "maze") {
+        for (let wall = 0; wall < 3; wall++)
+          mesh(
+            new THREE.BoxGeometry(0.18, 1.05, 2.2),
+            material(0x285e42, 0.86),
+            scene,
+            [x + (wall - 1) * 0.48, 0.48, -1.4 - wall * 1.35],
+          );
+      } else if (type === "fire") {
+        mesh(
+          new THREE.CylinderGeometry(0.32, 0.46, 1.4, 12),
+          material(0x554234, 0.88),
+          scene,
+          [x, 0.52, -1.5],
+        );
+        flame(scene, x, 1.42, -1.5, i % 2 ? 0xff5a24 : 0x48e8ff);
       } else {
         const obstacle = mesh(
           new THREE.TorusGeometry(0.75, 0.16, 12, 32),
@@ -505,12 +745,17 @@ export async function mountSpirit3D(root, players, options = {}) {
     }
   }
 
-  for (let i = 0; i < players.length; i++) {
-    const p = players[i];
-    const a = await avatar(
+  const preparedAvatars = await Promise.all(
+    players.map(async (p, i) => ({
       p,
-      colors[p.tribe] || (i % 2 ? "#ff9d4d" : "#35d7c2"),
-    );
+      i,
+      a: await avatar(
+        p,
+        colors[p.tribe] || (i % 2 ? "#ff9d4d" : "#35d7c2"),
+      ),
+    })),
+  );
+  for (const { p, i, a } of preparedAvatars) {
     avatarMap.set(p.id, a);
     scene.add(a);
     const label = labelSprite(p.name, colors[p.tribe] || "#6fffe9");
@@ -534,6 +779,17 @@ export async function mountSpirit3D(root, players, options = {}) {
         [a.position.x, 0.18, a.position.z + 0.25],
       );
       seat.rotation.y = a.rotation.y;
+    } else if (mode === "camp") {
+      const angle = -0.85 + (1.7 * i) / Math.max(1, players.length - 1),
+        radius = players.length > 6 ? 4.7 : 3.5;
+      a.position.set(Math.sin(angle) * radius, 0, 1.6 + Math.cos(angle) * 1.4);
+      a.rotation.y = -angle * 0.38;
+      a.userData.home = a.position.clone();
+      a.userData.action = "idle";
+    } else if (mode === "discovery") {
+      a.position.set((i - (players.length - 1) / 2) * 1.5, 0, 1.4);
+      a.userData.home = a.position.clone();
+      a.userData.action = "idle";
     } else {
       const cols = Math.min(8, Math.ceil(players.length / 2));
       const row = Math.floor(i / cols);
@@ -646,10 +902,33 @@ export async function mountSpirit3D(root, players, options = {}) {
         r.leftArm.rotation.x = -0.75 + Math.sin(phase * 2.4) * 0.8;
         r.rightArm.rotation.x = -0.75 - Math.sin(phase * 2.4) * 0.8;
         a.rotation.z = Math.sin(phase * 1.2) * 0.08;
+      } else if (a.userData.action === "row") {
+        r.leftArm.rotation.x = -1.15 + Math.sin(phase) * 0.55;
+        r.rightArm.rotation.x = -1.15 + Math.sin(phase) * 0.55;
+        a.rotation.z = Math.sin(phase * 0.7) * 0.07;
+      } else if (a.userData.action === "throw") {
+        r.rightArm.rotation.x = -1.8 + Math.sin(phase * 1.4) * 0.75;
+        r.leftArm.rotation.z = 0.8;
+      } else if (a.userData.action === "climb") {
+        r.leftArm.rotation.x = -1.4 + Math.sin(phase) * 0.8;
+        r.rightArm.rotation.x = -1.4 - Math.sin(phase) * 0.8;
+        r.leftLeg.rotation.x = Math.sin(phase) * 0.55;
+        r.rightLeg.rotation.x = -Math.sin(phase) * 0.55;
+      } else if (a.userData.action === "carry") {
+        r.leftArm.rotation.z = 1.12;
+        r.rightArm.rotation.z = -1.12;
+        r.leftArm.rotation.x = -0.75;
+        r.rightArm.rotation.x = -0.75;
       } else {
         a.position.y = Math.sin(phase * 0.35) * 0.025;
       }
     });
+    if (host) {
+      const hr = host.userData.rig;
+      hr.head.rotation.y = Math.sin(t * 0.58) * 0.12;
+      hr.leftArm.rotation.x = -0.72 + Math.sin(t * 1.4) * 0.16;
+      hr.rightArm.rotation.x = -0.72 - Math.sin(t * 1.4) * 0.16;
+    }
     scene.traverse((o) => {
       if (o.userData.flame) o.scale.y = 0.8 + Math.random() * 0.38;
       if (o.userData.challengePiece) {
@@ -660,6 +939,12 @@ export async function mountSpirit3D(root, players, options = {}) {
         o.userData.aura.rotation.z = t * 0.8;
         o.userData.aura.material.opacity = 0.48 + Math.sin(t * 3) * 0.24;
       }
+      if (o.userData.water) {
+        o.material.opacity = 0.62 + Math.sin(t * 1.4) * 0.08;
+        o.rotation.z = Math.sin(t * 0.12) * 0.015;
+      }
+      if (o.userData.raft) o.rotation.z = Math.sin(t * 1.6 + o.position.x) * 0.045;
+      if (o.userData.target) o.rotation.z = Math.sin(t * 0.7 + o.position.x) * 0.08;
     });
     particles.rotation.y = t * 0.025;
     renderer.render(scene, camera);
@@ -696,12 +981,37 @@ export async function mountSpirit3D(root, players, options = {}) {
       await moveTo(id, home, "vote", 760);
       a.userData.action = "idle";
     },
+    async revealVote(name) {
+      if (!host) return;
+      const card = voteCard(name);
+      card.position.set(0, 2.18, 0.9);
+      card.rotation.y = Math.PI;
+      card.scale.setScalar(0.08);
+      host.add(card);
+      const start = performance.now();
+      await new Promise((resolve) => {
+        const turn = (now) => {
+          const x = Math.min(1, (now - start) / 720),
+            eased = 1 - Math.pow(1 - x, 3);
+          card.rotation.y = Math.PI * (1 - eased);
+          card.scale.setScalar(0.08 + eased * 0.92);
+          if (x < 1 && !disposed) requestAnimationFrame(turn);
+          else resolve();
+        };
+        requestAnimationFrame(turn);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 760));
+      host.remove(card);
+      card.geometry.dispose();
+      card.material.map.dispose();
+      card.material.dispose();
+    },
     async playChallenge(winnerIds = []) {
       const type = options.challengeType || "race",
         winnerSet = new Set(winnerIds),
         runners = [...avatarMap.entries()],
         wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      if (type === "race" || type === "totem") {
+      if (type === "race" || type === "totem" || type === "maze") {
         await Promise.all(
           runners.map(([id, a], index) => {
             const checkpoint = a.userData.home.clone();
@@ -734,6 +1044,79 @@ export async function mountSpirit3D(root, players, options = {}) {
           }
         });
         await wait(1300);
+      } else if (type === "raft") {
+        runners.forEach(([, a]) => (a.userData.action = "row"));
+        for (let wave = 0; wave < 3; wave++) {
+          await Promise.all(
+            runners.map(([id, a], index) => {
+              const checkpoint = a.position.clone();
+              checkpoint.z -= 1.35;
+              checkpoint.x += Math.sin(index + wave) * 0.25;
+              return moveTo(id, checkpoint, "row", 720 + (index % 4) * 90);
+            }),
+          );
+        }
+      } else if (type === "archery" || type === "spear") {
+        runners.forEach(([, a]) => (a.userData.action = "throw"));
+        for (let round = 0; round < 3; round++) {
+          const projectiles = runners.map(([, a], index) => {
+            const projectile = mesh(
+              type === "archery"
+                ? new THREE.CylinderGeometry(0.022, 0.022, 1.05, 7)
+                : new THREE.ConeGeometry(0.055, 1.35, 8),
+              material(type === "archery" ? 0xffdb75 : 0xaee9ff, 0.42, 0.35),
+              scene,
+              [a.position.x, 1.45 + (index % 2) * 0.08, a.position.z - 0.35],
+            );
+            projectile.rotation.x = Math.PI / 2;
+            return projectile;
+          });
+          const started = performance.now();
+          await new Promise((resolve) => {
+            const fly = (now) => {
+              const progress = Math.min(1, (now - started) / 620);
+              projectiles.forEach((projectile, index) => {
+                projectile.position.z -= 0.105;
+                projectile.position.y += Math.sin(progress * Math.PI) * 0.012;
+                projectile.rotation.z = Math.sin(index + round) * 0.08;
+              });
+              if (progress < 1 && !disposed) requestAnimationFrame(fly);
+              else resolve();
+            };
+            requestAnimationFrame(fly);
+          });
+          projectiles.forEach((projectile) => {
+            scene.remove(projectile);
+            projectile.geometry.dispose();
+            projectile.material.dispose();
+          });
+          scene.traverse((o) => {
+            if (o.userData.target) o.rotation.y += 0.7 + round * 0.2;
+          });
+          await wait(180);
+        }
+      } else if (type === "climb") {
+        runners.forEach(([, a]) => (a.userData.action = "climb"));
+        await Promise.all(
+          runners.map(([id, a], index) => {
+            const target = a.position.clone();
+            target.y = winnerSet.has(id) ? 2.8 : 1.1 + (index % 3) * 0.45;
+            target.z -= 1.4;
+            return moveTo(id, target, "climb", winnerSet.has(id) ? 2350 : 2800);
+          }),
+        );
+      } else if (type === "fire") {
+        runners.forEach(([, a]) => {
+          a.userData.action = "carry";
+          flame(a, 0.36, 1.18, 0.25, 0xff7b26);
+        });
+        await Promise.all(
+          runners.map(([id, a], index) => {
+            const target = a.position.clone();
+            target.z -= winnerSet.has(id) ? 4.8 : 2.4 + (index % 3) * 0.3;
+            return moveTo(id, target, "carry", 2400 + (index % 4) * 100);
+          }),
+        );
       } else {
         runners.forEach(([, a]) => (a.userData.action = "puzzle"));
         await wait(type === "memory" ? 3100 : 2700);
@@ -836,6 +1219,80 @@ export async function mountSpirit3D(root, players, options = {}) {
       a.userData.action = "idle";
       b.userData.action = "idle";
     },
+    async attack(attackerId, targetId, type = "spirit-pistol") {
+      const attacker = avatarMap.get(attackerId),
+        target = avatarMap.get(targetId);
+      if (!attacker || !target) return;
+      await Promise.all([
+        moveTo(attackerId, new THREE.Vector3(-1.15, 0, 0.85), "fight", 820),
+        moveTo(targetId, new THREE.Vector3(1.25, 0, 0.85), "fight", 820),
+      ]);
+      attacker.rotation.y = Math.PI / 2;
+      target.rotation.y = -Math.PI / 2;
+      attacker.userData.action = "fight";
+      target.userData.action = "fight";
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const origin = attacker.position.clone().add(new THREE.Vector3(0.55, 1.65, 0)),
+        destination = target.position.clone().add(new THREE.Vector3(-0.35, 1.55, 0)),
+        projectile = mesh(
+          type === "magic-blast"
+            ? new THREE.IcosahedronGeometry(0.22, 1)
+            : new THREE.SphereGeometry(0.09, 12, 8),
+          new THREE.MeshStandardMaterial({
+            color: type === "spirit-pistol" ? 0xffdc72 : 0x9a52ff,
+            emissive: type === "spirit-pistol" ? 0xff6b20 : 0x5722ff,
+            emissiveIntensity: 4,
+          }),
+          scene,
+          origin.toArray(),
+        );
+      if (type === "spirit-pistol") {
+        const weapon = mesh(
+          new THREE.BoxGeometry(0.65, 0.16, 0.2),
+          material(0x24282d, 0.22, 0.88),
+          attacker,
+          [0.55, 1.62, 0.22],
+        );
+        weapon.rotation.z = -0.08;
+      } else if (type === "duel-strike") {
+        const blade = mesh(
+          new THREE.ConeGeometry(0.07, 1.35, 8),
+          material(0xd7eef3, 0.15, 0.92),
+          attacker,
+          [0.5, 1.38, 0.2],
+        );
+        blade.rotation.z = -1.1;
+      }
+      const flash = new THREE.PointLight(
+        type === "magic-blast" ? 0x8b52ff : 0xff7a32,
+        14,
+        15,
+      );
+      flash.position.copy(origin);
+      scene.add(flash);
+      const start = performance.now();
+      await new Promise((resolve) => {
+        const fly = (now) => {
+          const x = Math.min(1, (now - start) / 620),
+            eased = x * x * (3 - 2 * x);
+          projectile.position.lerpVectors(origin, destination, eased);
+          projectile.scale.setScalar(1 + Math.sin(x * Math.PI) * 1.6);
+          if (x < 1 && !disposed) requestAnimationFrame(fly);
+          else resolve();
+        };
+        requestAnimationFrame(fly);
+      });
+      scene.remove(projectile, flash);
+      const impact = new THREE.PointLight(0xff3a35, 18, 17);
+      impact.position.copy(destination);
+      scene.add(impact);
+      target.userData.action = "idle";
+      target.rotation.z = -1.35;
+      target.position.y = -0.62;
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      scene.remove(impact);
+      attacker.userData.action = "idle";
+    },
     async duel(firstId, secondId, survivorId) {
       const a = avatarMap.get(firstId),
         b = avatarMap.get(secondId);
@@ -892,8 +1349,57 @@ export async function mountSpirit3D(root, players, options = {}) {
         light = new THREE.PointLight(colors[type] || colors.flame, 9, 11);
       light.position.copy(a.position).add(new THREE.Vector3(0, 2.2, 1));
       scene.add(light);
+      const effect = new THREE.Group();
+      effect.position.copy(a.position).add(new THREE.Vector3(0, 1.45, 0));
+      scene.add(effect);
+      if (type === "storm") {
+        for (let i = 0; i < 7; i++) {
+          const bolt = mesh(
+            new THREE.ConeGeometry(0.035, 2.2, 5),
+            new THREE.MeshBasicMaterial({ color: 0x73b7ff }),
+            effect,
+            [Math.sin(i * 2.2) * 0.9, 0.5, Math.cos(i) * 0.45],
+          );
+          bolt.rotation.z = (i - 3) * 0.18;
+        }
+      } else if (type === "mirror") {
+        for (const side of [-1, 1]) {
+          const disc = mesh(
+            new THREE.CircleGeometry(0.62, 28),
+            new THREE.MeshBasicMaterial({
+              color: 0xdffaff,
+              transparent: true,
+              opacity: 0.58,
+              side: THREE.DoubleSide,
+            }),
+            effect,
+            [side * 1.05, 0.45, 0],
+          );
+          disc.rotation.y = side * 0.5;
+        }
+      } else if (type === "twin") {
+        for (const side of [-1, 1])
+          mesh(
+            new THREE.TorusKnotGeometry(0.38, 0.055, 48, 8),
+            new THREE.MeshBasicMaterial({ color: side < 0 ? 0xff5ca9 : 0xffd66f }),
+            effect,
+            [side * 0.72, 0.5, 0],
+          ).userData.challengePiece = true;
+      } else if (type === "oracle") {
+        const eye = mesh(
+          new THREE.TorusGeometry(0.8, 0.08, 12, 48),
+          new THREE.MeshBasicMaterial({ color: 0xc28cff }),
+          effect,
+          [0, 0.62, 0],
+        );
+        eye.scale.y = 0.52;
+        eye.userData.challengePiece = true;
+      } else {
+        for (let i = 0; i < 8; i++)
+          flame(effect, Math.sin(i * 1.7) * 0.8, 0.2, Math.cos(i * 1.7) * 0.6, 0xffc247);
+      }
       setTimeout(() => {
-        scene.remove(light);
+        scene.remove(light, effect);
         a.userData.action = "idle";
       }, 3200);
     },
