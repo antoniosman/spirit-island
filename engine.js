@@ -1,9 +1,16 @@
 export const pairKey = (a, b) => [a, b].sort().join("|");
-const pick = (items, score, rng = Math.random) =>
+const pick = (items, score, rng) =>
   items
     .map((x) => ({ x, n: score(x) + rng() * 10 }))
     .sort((a, b) => b.n - a.n)[0]?.x;
-export function createGame(players, tribes, bonds, idolOwner = null) {
+
+export function createGame(
+  players,
+  tribes,
+  bonds,
+  idolOwner = null,
+  alliances = [],
+) {
   return {
     players: structuredClone(players).map((p) => ({
       ...p,
@@ -12,64 +19,127 @@ export function createGame(players, tribes, bonds, idolOwner = null) {
     })),
     tribes: structuredClone(tribes),
     bonds: structuredClone(bonds),
+    cliques: structuredClone(alliances).map((c, i) => ({
+      id: c.id || `clique-${i}`,
+      name: c.name,
+      members: [...c.members],
+      active: true,
+      createdEpisode: 1,
+    })),
     episode: 1,
     stage: "challenge",
     merge: false,
-    mergeAnnounced: false,
+    mergePending: false,
     returnDone: false,
     order: [],
     jury: [],
     history: [],
     winner: null,
     finalists: [],
+    finalData: null,
+    idols: idolOwner
+      ? [{ id: "idol-start", owner: idolOwner, used: false, foundEpisode: 0 }]
+      : [],
     idol: { owner: idolOwner, used: false },
+    idolSerial: idolOwner ? 1 : 0,
     winnerTeamChoice: null,
     individualWinnerChoice: null,
     returnChoice: null,
   };
 }
+
 export function step(s, rng = Math.random) {
+  s.cliques ||= [];
+  s.idols ||=
+    s.idol?.owner && !s.idol.used
+      ? [
+          {
+            id: "idol-legacy",
+            owner: s.idol.owner,
+            used: false,
+            foundEpisode: 0,
+          },
+        ]
+      : [];
+  s.idolSerial ||= s.idols.length;
   const alive = s.players.filter((p) => !p.out),
     get = (id) => s.players.find((p) => p.id === id),
-    name = (id) => get(id)?.name || "",
-    bond = (a, b) => s.bonds[pairKey(a, b)] || 0;
+    name = (id) => get(id)?.name || "";
+  const bond = (a, b) =>
+    (s.bonds[pairKey(a, b)] || 0) +
+    s.cliques.filter(
+      (c) => c.active && c.members.includes(a) && c.members.includes(b),
+    ).length *
+      6;
   const event = (title, text, ids = [], extra = {}) => {
-    const e = { episode: s.episode, title, text, ids, ...extra };
+    const e = {
+      episode: s.episode,
+      stage: s.stage,
+      title,
+      text,
+      ids,
+      ...extra,
+    };
     s.history.push(e);
     return e;
   };
+  const activateMerge = (returned = []) => {
+    s.merge = true;
+    s.mergePending = false;
+    s.stage = "challenge";
+    return event(
+      "MERGE · Το ατομικό παιχνίδι αρχίζει",
+      `${returned.length ? `${returned.map((p) => p.name).join(" και ")} επιστρέφουν. ` : ""}${s.players
+        .filter((p) => !p.out)
+        .map((p) => p.name)
+        .join(
+          ", ",
+        )} έφτασαν στα ατομικά. Από τώρα κάθε ασυλία και κάθε ψήφος είναι προσωπική.`,
+      s.players.filter((p) => !p.out).map((p) => p.id),
+      { merge: true, returned: returned.map((p) => p.id), mergeCast: true },
+    );
+  };
   if (s.winner) return null;
   if (alive.length === 3) {
-    const jury = s.jury.map(get).filter(Boolean),
-      votes = jury.map((j) => ({
-        voter: j.id,
+    const voters = s.order.map(get).filter(Boolean),
+      votes = voters.map((v) => ({
+        voter: v.id,
         target: pick(
           alive,
           (p) =>
-            bond(j.id, p.id) + p.social * 1.1 + p.strategy * 0.7 + p.wins * 1.5,
+            bond(v.id, p.id) + p.social * 1.1 + p.strategy * 0.7 + p.wins * 1.5,
           rng,
         ).id,
       }));
     const tally = alive
-      .map((p) => ({ p, n: votes.filter((v) => v.target === p.id).length }))
-      .sort((a, b) => b.n - a.n);
-    const winner =
-      tally[0].n === tally[1].n
-        ? pick(alive, (p) => p.social + p.strategy + p.wins, rng)
-        : tally[0].p;
+      .map((p) => ({
+        id: p.id,
+        n: votes.filter((v) => v.target === p.id).length,
+      }))
+      .sort((a, b) => b.n - a.n || get(b.id).social - get(a.id).social);
+    const third = tally[2],
+      finalTwo = tally.slice(0, 2),
+      winner = get(finalTwo[0].id);
     s.winner = winner.id;
     s.finalists = alive.map((p) => p.id);
     s.stage = "final";
+    s.finalData = {
+      voters: voters.map((p) => p.id),
+      votes,
+      tally,
+      third: third.id,
+      finalTwo: finalTwo.map((x) => x.id),
+    };
     return event(
       "Ο ζωντανός τελικός",
-      `${winner.name} κερδίζει το Spirit Island! Ψήφισαν μόνο όσοι έφτασαν στο Merge.`,
+      `${winner.name} κερδίζει το Spirit Island. Όλοι οι αποχωρήσαντες ψήφισαν τον νικητή.`,
       alive.map((p) => p.id),
-      { final: true, votes },
+      { final: true, votes, ...s.finalData },
     );
   }
   if (s.stage === "return") {
-    const pool = s.order.map(get).filter((p) => p?.out);
-    const chosen = pool.find((p) => p.id === s.returnChoice);
+    const pool = s.order.map(get).filter((p) => p?.out),
+      chosen = pool.find((p) => p.id === s.returnChoice);
     if (!chosen)
       return { requiresChoice: "return", candidates: pool.map((p) => p.id) };
     const rest = pool.filter((p) => p.id !== chosen.id),
@@ -78,32 +148,38 @@ export function step(s, rng = Math.random) {
     returned.forEach((p) => {
       p.out = false;
       s.order = s.order.filter((id) => id !== p.id);
+      s.jury = s.jury.filter((id) => id !== p.id);
     });
     s.returnChoice = null;
     s.returnDone = true;
-    s.stage = "challenge";
-    return event(
-      "Η Παλίρροια της Επιστροφής",
-      `${returned.map((p) => p.name).join(" και ")} επιστρέφουν. Ο ένας επιλέχθηκε από το κοινό και ο άλλος από την τύχη.`,
-      returned.map((p) => p.id),
-      { twist: true, returned: returned.map((p) => p.id) },
-    );
+    return activateMerge(returned);
   }
   if (s.stage === "challenge") {
+    const challenges = [
+        { type: "race", name: "Δρόμος της Ζούγκλας" },
+        { type: "balance", name: "Γέφυρα της Ισορροπίας" },
+        { type: "puzzle", name: "Παζλ των Αρχαίων Πνευμάτων" },
+        { type: "endurance", name: "Στύλοι της Παλίρροιας" },
+        { type: "memory", name: "Μνήμη των Κρυστάλλων" },
+        { type: "totem", name: "Κυνήγι των Τοτέμ" },
+      ],
+      challenge = challenges[(s.episode - 1) % challenges.length];
     if (!s.merge) {
       const active = s.tribes.filter((t) =>
         alive.some((p) => p.tribe === t.id),
       );
       if (active.length <= 1 || alive.length <= 10) {
-        s.merge = true;
-        s.mergeAnnounced = true;
-        s.stage = !s.returnDone && s.order.length >= 2 ? "return" : "challenge";
-        return event(
-          "MERGE · Μία νέα παραλία",
-          `Οι ${alive.length} επιζώντες πετούν τα παλιά χρώματα. Από εδώ και πέρα το παιχνίδι είναι ατομικό.`,
-          alive.map((p) => p.id),
-          { merge: true, twist: true },
-        );
+        if (!s.returnDone && s.order.length >= 2) {
+          s.mergePending = true;
+          s.stage = "return";
+          return event(
+            "Η τελευταία πύλη πριν από το Merge",
+            `Το ομαδικό παιχνίδι ολοκληρώθηκε στους ${alive.length}. Δύο παίκτες θα επιστρέψουν και αμέσως μετά θα ανακοινωθεί το ατομικό cast.`,
+            alive.map((p) => p.id),
+            { twist: true, mergePending: true },
+          );
+        }
+        return activateMerge();
       }
       const chosen = active.find((t) => t.id === s.winnerTeamChoice),
         winner =
@@ -121,15 +197,20 @@ export function step(s, rng = Math.random) {
       s.stage = "camp";
       alive.filter((p) => p.tribe === winner.id).forEach((p) => p.wins++);
       return event(
-        "Δοκιμασία ασυλίας",
-        `${winner.name} κερδίζει την ομαδική ασυλία. Οι υπόλοιπες ομάδες πηγαίνουν στο Συμβούλιο.`,
+        `${challenge.name} · Η ασυλία ανήκει στη ${winner.name}`,
+        `${winner.name} κερδίζει τη δοκιμασία «${challenge.name}». Η σημαία της υψώνεται και η ομάδα δεν πηγαίνει στο Συμβούλιο.`,
         alive.filter((p) => p.tribe === winner.id).map((p) => p.id),
-        { tribe: winner.id },
+        {
+          tribe: winner.id,
+          immunityAnnouncement: true,
+          challengeType: challenge.type,
+          challengeName: challenge.name,
+        },
       );
     }
-    const selectedWinner = alive.find((p) => p.id === s.individualWinnerChoice),
+    const selected = alive.find((p) => p.id === s.individualWinnerChoice),
       winner =
-        selectedWinner ||
+        selected ||
         pick(
           alive,
           (p) => p.competition * 1.2 + p.strategy * 0.4 + p.wins * 0.3,
@@ -140,35 +221,113 @@ export function step(s, rng = Math.random) {
     s.individualImmune = winner.id;
     s.stage = "camp";
     return event(
-      "Ατομική ασυλία",
-      `${winner.name} κερδίζει το φυλαχτό και δεν μπορεί να αποχωρήσει απόψε.`,
+      `${challenge.name} · Ατομική ασυλία`,
+      `${winner.name} κερδίζει τη δοκιμασία «${challenge.name}» και δεν μπορεί να αποχωρήσει απόψε.`,
       [winner.id],
+      {
+        immunityAnnouncement: true,
+        challengeType: challenge.type,
+        challengeName: challenge.name,
+      },
     );
   }
   if (s.stage === "camp") {
-    if (!s.idol.owner && !s.idol.used && rng() < 0.18) {
-      const finder = alive[Math.floor(rng() * alive.length)];
-      s.idol.owner = finder.id;
+    const activeIdols = s.idols.filter(
+      (i) => !i.used && get(i.owner) && !get(i.owner).out,
+    );
+    const maxIdols = s.merge
+      ? 2
+      : Math.min(4, Math.max(2, s.tribes.length + 1));
+    if (activeIdols.length < maxIdols && rng() < 0.3) {
+      const searchers = alive.filter(
+          (p) => !activeIdols.some((idol) => idol.owner === p.id),
+        ),
+        finder =
+          searchers[Math.floor(rng() * searchers.length)] ||
+          alive[Math.floor(rng() * alive.length)],
+        idol = {
+          id: `idol-${++s.idolSerial}`,
+          owner: finder.id,
+          used: false,
+          foundEpisode: s.episode,
+        };
+      s.idols.push(idol);
+      s.idol = { owner: finder.id, used: false };
       s.stage = "council";
       return event(
         "Το κρυμμένο Idol βρέθηκε",
-        `${finder.name} ανακαλύπτει το μοναδικό Idol του νησιού. Το μυστικό σύμβολο εμφανίζεται στην κάρτα του.`,
+        `${finder.name} ανακαλύπτει ένα κρυμμένο Idol. Υπάρχουν ${activeIdols.length + 1} ενεργά Idols στο παιχνίδι.`,
         [finder.id],
-        { idol: true },
+        { idol: true, idolFound: idol.id, idolOwner: finder.id },
+      );
+    }
+    const viable = s.cliques.filter(
+      (c) => c.active && c.members.filter((id) => !get(id)?.out).length >= 2,
+    );
+    if (viable.length && rng() < 0.2) {
+      const clique = viable[Math.floor(rng() * viable.length)];
+      clique.active = false;
+      clique.brokenEpisode = s.episode;
+      s.stage = "council";
+      const ids = clique.members.filter((id) => !get(id)?.out);
+      return event(
+        "Μια κλίκα διαλύεται",
+        `Η κλίκα «${clique.name}» σπάει μετά από προδοσία.`,
+        ids,
+        {
+          cliqueBroken: clique.id,
+          dialogue: ids.slice(0, 2).map((id, i) => ({
+            speaker: name(id),
+            text: i ? "Η συμφωνία τελείωσε." : "Κάποιος μας πρόδωσε.",
+          })),
+        },
+      );
+    }
+    if (alive.length >= 4 && rng() < 0.18) {
+      const members = [...alive].sort(() => rng() - 0.5).slice(0, 3),
+        clique = {
+          id: crypto.randomUUID(),
+          name: `Κρυφό Σύμφωνο ${s.episode}`,
+          members: members.map((p) => p.id),
+          active: true,
+          createdEpisode: s.episode,
+        };
+      s.cliques.push(clique);
+      s.stage = "council";
+      return event(
+        "Νέα κλίκα γεννιέται",
+        `${members.map((p) => p.name).join(", ")} δημιουργούν την κλίκα «${clique.name}».`,
+        clique.members,
+        {
+          cliqueCreated: clique.id,
+          dialogue: members.slice(0, 3).map((p, i) => ({
+            speaker: p.name,
+            text:
+              i === 0
+                ? "Απόψε ξεκινά το σχέδιό μας. Θα μοιραζόμαστε πληροφορίες, όχι όλες τις ψήφους."
+                : i === 1
+                  ? "Το όνομά μας δεν θα ακουστεί. Αν αλλάξουν οι αριθμοί, θέλω να το ξέρω πρώτος."
+                  : "Συμφωνώ, αλλά κρατάω ανοιχτή και μια δεύτερη διαδρομή.",
+          })),
+        },
       );
     }
     const a = alive[Math.floor(rng() * alive.length)],
-      others = alive.filter((p) => p.id !== a.id),
-      b = others[Math.floor(rng() * others.length)],
+      b = alive.filter((p) => p.id !== a.id)[
+        Math.floor(rng() * (alive.length - 1))
+      ],
+      witness = alive
+        .filter((p) => p.id !== a.id && p.id !== b.id)
+        .sort((x, y) => y.strategy - x.strategy)[0],
       k = pairKey(a.id, b.id),
       delta = rng() > 0.42 ? 2 : -2;
     s.bonds[k] = Math.max(-10, Math.min(10, (s.bonds[k] || 0) + delta));
     s.stage = "council";
     return event(
-      delta > 0 ? "Συμμαχία στην ακτή" : "Ρήγμα στην κλίκα",
+      delta > 0 ? "Συμμαχία στην ακτή" : "Ρήγμα στην παραλία",
       delta > 0
-        ? `${a.name} και ${b.name} δίνουν κρυφό όρκο δίπλα στη φωτιά.`
-        : `${a.name} και ${b.name} συγκρούονται για το σχέδιο της ψηφοφορίας.`,
+        ? `${a.name} και ${b.name} δίνουν κρυφό όρκο.`
+        : `${a.name} και ${b.name} συγκρούονται για την ψηφοφορία.`,
       [a.id, b.id],
       {
         dialogue: [
@@ -179,11 +338,16 @@ export function step(s, rng = Math.random) {
           {
             speaker: b.name,
             text:
-              delta > 0
-                ? "Κανείς δεν θα το μάθει."
-                : "Τότε θα γράψω το όνομά σου.",
+              delta > 0 ? "Κανείς δεν θα το μάθει." : "Θα γράψω το όνομά σου.",
           },
-        ],
+          witness && {
+            speaker: witness.name,
+            text:
+              delta > 0
+                ? `Τους είδα να απομακρύνονται μαζί. Αν οι ${a.name} και ${b.name} ενώθηκαν, πρέπει να αλλάξω το δικό μου πλάνο.`
+                : `Η σύγκρουση των ${a.name} και ${b.name} ανοίγει χώρο για μια νέα πλειοψηφία.`,
+          },
+        ].filter(Boolean),
       },
     );
   }
@@ -203,60 +367,107 @@ export function step(s, rng = Math.random) {
           )?.id,
         }))
         .filter((v) => v.target);
-    if (!votes.length)
-      alive
-        .filter((p) => vulnerable.some((x) => x.id === p.id))
-        .forEach((v) =>
-          votes.push({
-            voter: v.id,
-            target: pick(
-              vulnerable.filter((p) => p.id !== v.id),
-              (p) => -bond(v.id, p.id) + p.strategy * 0.4,
-              rng,
-            )?.id,
-          }),
-        );
     const rank = () =>
-        vulnerable
-          .map((p) => ({
-            id: p.id,
-            n: votes.filter((v) => v.target === p.id).length,
-          }))
-          .sort((a, b) => b.n - a.n),
-      first = rank()[0];
-    let out = first.id,
-      idolPlayed = null;
-    const holder = get(s.idol.owner);
-    if (
-      holder &&
-      !holder.out &&
-      !s.idol.used &&
-      (out === holder.id || bond(holder.id, out) >= 6)
-    ) {
-      idolPlayed = out;
-      s.idol.used = true;
-      s.idol.owner = null;
-      const next = rank().find((x) => x.id !== out);
-      if (next) out = next.id;
+      vulnerable
+        .map((p) => ({
+          id: p.id,
+          n: votes.filter((v) => v.target === p.id).length,
+        }))
+        .sort((a, b) => b.n - a.n || rng() - 0.5);
+    let out = rank()[0].id;
+    const idolPlays = [],
+      nullified = new Set();
+    for (const idol of s.idols.filter((x) => !x.used)) {
+      const holder = get(idol.owner);
+      if (
+        !holder ||
+        holder.out ||
+        !voters.some((v) => v.id === holder.id) ||
+        nullified.has(out)
+      )
+        continue;
+      if (out === holder.id || bond(holder.id, out) >= 6) {
+        const saved = out;
+        idol.used = true;
+        idol.playedEpisode = s.episode;
+        idol.saved = saved;
+        nullified.add(saved);
+        idolPlays.push({ idol: idol.id, actor: holder.id, saved });
+        out = rank().find((x) => !nullified.has(x.id))?.id || out;
+      }
     }
+    const idolPlayed = idolPlays[0]?.actor || null,
+      idolSaved = idolPlays[0]?.saved || null;
+    s.idol = {
+      owner: s.idols.find((x) => !x.used)?.owner || null,
+      used: !s.idols.some((x) => !x.used),
+    };
+    const leadingVote = votes.find((v) => v.target === out),
+      accuser = get(leadingVote?.voter) || voters[0],
+      target = get(out),
+      observer = voters
+        .filter((p) => p.id !== accuser?.id && p.id !== target?.id)
+        .sort((a, b) => b.strategy + b.social - (a.strategy + a.social))[0],
+      councilDialogue = [
+        accuser && {
+          speaker: accuser.name,
+          text:
+            accuser.strategy >= 7
+              ? "Οι αριθμοί άλλαξαν σήμερα. Κάποιος που νιώθει ασφαλής δεν είναι."
+              : accuser.social >= 7
+                ? "Άκουσα πολλές υποσχέσεις, αλλά απόψε μετράει ποιος τις κράτησε."
+                : "Στο νησί επιβιώνεις μόνο όταν παίρνεις δύσκολες αποφάσεις.",
+        },
+        target && {
+          speaker: target.name,
+          text:
+            target.strategy >= 7
+              ? "Αν το σχέδιο είναι εναντίον μου, ίσως δεν γνωρίζετε ολόκληρο το σχέδιο."
+              : target.social >= 7
+                ? "Οι σχέσεις μου είναι αληθινές. Απόψε θα μάθω αν ήταν και αμοιβαίες."
+                : "Δεν ήρθα μέχρι εδώ για να παραδώσω τη φλόγα μου χωρίς μάχη.",
+        },
+        observer && {
+          speaker: observer.name,
+          text: s.cliques.some(
+            (c) =>
+              c.active &&
+              c.members.includes(observer.id) &&
+              c.members.includes(out),
+          )
+            ? "Μερικές συμμαχίες φαίνονται δυνατές μέχρι τη στιγμή που δοκιμάζονται."
+            : "Η σιωπή απόψε λέει περισσότερα από τις κουβέντες στην παραλία.",
+        },
+      ].filter(Boolean);
     const leaving = get(out);
     leaving.out = true;
     s.order.push(out);
     if (s.merge) s.jury.push(out);
     const safeOrder = vulnerable
-      .filter((p) => p.id !== out)
-      .sort(() => rng() - 0.5)
-      .map((p) => p.id);
-    const place = s.players.length - s.order.length + 1;
+        .filter((p) => p.id !== out && !nullified.has(p.id))
+        .sort(() => rng() - 0.5)
+        .map((p) => p.id),
+      place = s.players.length - s.order.length + 1;
     s.individualImmune = null;
     s.safeTribe = null;
     s.stage = "challenge";
-    s.episode++;
-    return event(
+    const result = event(
       "Συμβούλιο του Νησιού",
-      `${safeOrder.map(name).join(", ")} παραμένουν. ${leaving.name}, η φλόγα σου σβήνει — Θέση ${place}.${idolPlayed ? ` Το Idol έσωσε τον ${name(idolPlayed)} και ενεργοποιήθηκε η δεύτερη επιλογή.` : ""}`,
-      safeOrder.concat(out),
-      { evicted: out, safeOrder, place, idolPlayed, votes },
+      `${leaving.name}, η φλόγα σου σβήνει — Θέση ${place}.${idolPlays.length ? ` Παίχτηκαν ${idolPlays.length} Idol και ακυρώθηκαν οι ψήφοι των ${idolPlays.map((x) => name(x.saved)).join(", ")}.` : ""}`,
+      safeOrder.concat([...nullified], out),
+      {
+        evicted: out,
+        safeOrder,
+        place,
+        idolPlayed,
+        idolSaved,
+        idolPlays,
+        councilDialogue,
+        votes,
+        voteTally: rank(),
+      },
     );
+    s.episode++;
+    return result;
   }
 }

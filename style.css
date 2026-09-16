@@ -129,7 +129,7 @@ main {
   letter-spacing: 3px;
 }
 .hero h1 {
-  font: 900 clamp(42px, 7vw, 88px)/0.94 Montserrat;
+  font: 900 clamp(42px, 7vw, 88px) / 0.94 Montserrat;
   margin: 15px 0;
   background: linear-gradient(120deg, #fff, #fff4b4, #68ffe3);
   background-clip: text;
@@ -368,6 +368,70 @@ select {
 .livegrid {
   margin: 26px 0;
 }
+.tribe-groups > section {
+  margin: 28px 0;
+  padding: 18px;
+  background: #041a20c9;
+  border: 1px solid color-mix(in srgb, var(--c), transparent 65%);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 4px var(--c),
+    0 20px 50px #0006;
+}
+.tribe-groups > section > header {
+  position: static;
+  height: auto;
+  padding: 5px 5px 16px;
+  background: none;
+  border: 0;
+}
+.tribe-groups header h2 {
+  font: 900 30px Montserrat;
+  margin: 2px 0;
+  color: var(--c);
+}
+.tribe-groups header p {
+  margin: 0;
+  color: #9ab0af;
+}
+.tribe-groups header > b {
+  color: var(--c);
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+.phase-track {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 18px 0;
+  background: #031a20d9;
+  border: 1px solid #3d625e;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.phase-track span {
+  padding: 13px;
+  text-align: center;
+  color: #71918e;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  border-right: 1px solid #23413f;
+}
+.phase-track span.on {
+  color: #041d1d;
+  background: var(--aqua);
+  box-shadow: 0 0 25px #2fe3c2;
+}
+.live-tabs {
+  margin: 34px 0 18px;
+}
+.livegrid .card:not(.out) .photo img {
+  animation: avatarBreath 5s ease-in-out infinite alternate;
+  transform-origin: 50% 75%;
+}
+.livegrid .card:nth-child(2n) .photo img {
+  animation-delay: -2.2s;
+}
 .livegrid .photo {
   height: 180px;
 }
@@ -388,6 +452,111 @@ select {
   font-size: 17px;
   line-height: 1.7;
   color: #cfdbd7;
+}
+.episode details,
+.history > details {
+  margin-top: 20px;
+  padding: 15px;
+  background: #03171dbb;
+  border: 1px solid #31524f;
+  border-radius: 12px;
+}
+.episode summary,
+.history summary {
+  cursor: pointer;
+  font-weight: 900;
+  color: var(--aqua);
+}
+.vote-row {
+  display: grid;
+  grid-template-columns: 1fr 30px 1fr;
+  padding: 10px;
+  border-bottom: 1px solid #ffffff13;
+}
+.vote-row b {
+  color: var(--gold);
+}
+.idol-event {
+  border-color: var(--gold);
+  box-shadow: 0 0 50px #ffc95c22;
+}
+.history > details {
+  margin: 12px 0;
+}
+.history .episode {
+  min-height: 0;
+  margin: 15px 0;
+}
+.clique-board {
+  padding: 30px;
+  background: #061d24e8;
+  border-radius: 20px;
+}
+.clique-board > article {
+  display: inline-block;
+  vertical-align: top;
+  width: min(360px, 100%);
+  margin: 10px;
+  padding: 20px;
+  border: 1px solid #36dbba;
+  border-radius: 15px;
+  background: #0d302f;
+}
+.clique-board > article.broken {
+  filter: grayscale(1);
+  opacity: 0.55;
+  border-color: #6d7776;
+}
+.clique-board article > span {
+  color: var(--aqua);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+.ranking {
+  padding: 25px;
+  background: #051c23e8;
+  border-radius: 20px;
+}
+.ranking > div {
+  display: grid;
+  grid-template-columns: 55px 58px 1fr auto;
+  align-items: center;
+  gap: 13px;
+  padding: 10px;
+  border-bottom: 1px solid #ffffff16;
+}
+.ranking > div > b {
+  font: 900 24px Montserrat;
+  color: var(--gold);
+}
+.ranking img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.ranking small {
+  color: #95afab;
+}
+.winner-stats {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+.winner-stats > b {
+  min-width: 110px;
+  padding: 14px;
+  background: #001b20b5;
+  border: 1px solid #ffd36a;
+  border-radius: 12px;
+  font-size: 25px;
+}
+.winner-stats small {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #d9c787;
 }
 .faces {
   display: flex;
@@ -501,7 +670,201 @@ select {
   opacity: 0.65;
 }
 .council:before {
-  filter: brightness(0.23) saturate(0.7);
+  background-image: url("council-stage.png");
+  filter: brightness(0.26) saturate(0.8);
+}
+.council > div {
+  perspective: 1000px;
+}
+.council img {
+  object-position: center 22%;
+  animation: seatedAvatar 3.5s ease-in-out infinite alternate;
+}
+.council.idol-twist:after {
+  content: "◆";
+  position: absolute;
+  z-index: 4;
+  font-size: clamp(180px, 35vw, 480px);
+  color: #ffd65c;
+  filter: drop-shadow(0 0 45px #ffc400);
+  animation: idolBurst 1s ease-out both;
+}
+.council.idol-twist > div {
+  z-index: 5;
+}
+.council.idol-twist p {
+  color: #fff2a8;
+  text-shadow: 0 0 20px #ffb300;
+}
+.council-stage3d,
+.challenge-stage3d,
+.idol-stage3d,
+.dialogue-stage3d {
+  position: absolute !important;
+  inset: 0;
+  z-index: 2 !important;
+  width: 100%;
+  height: 100%;
+  animation: none !important;
+}
+.spirit-webgl {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 25px 30px #000a);
+}
+.council-hud {
+  position: absolute !important;
+  z-index: 4 !important;
+  left: 50%;
+  top: 5vh;
+  width: min(760px, 88vw);
+  transform: translateX(-50%);
+  padding: 14px 22px;
+  border: 1px solid #f5c86f77;
+  border-radius: 18px;
+  background: linear-gradient(120deg, #021115e8, #173332b8);
+  box-shadow: 0 20px 60px #000b;
+  backdrop-filter: blur(10px);
+}
+.council-hud > span,
+.challenge-hud > span {
+  color: #ff735c;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 3px;
+}
+.council-hud h1 {
+  margin: 6px 0;
+  font-size: clamp(22px, 4vw, 46px);
+}
+.council-hud p {
+  margin: 5px;
+  font-size: clamp(14px, 2vw, 20px);
+}
+.council .reveal-portrait {
+  position: absolute;
+  left: -92px;
+  top: 50%;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  opacity: 0;
+  transform: translateY(-50%) scale(0.5);
+  transition: 0.35s ease;
+  object-fit: cover;
+  border: 3px solid var(--gold);
+  box-shadow: 0 0 30px #ffc552aa;
+}
+.council .reveal-portrait.visible {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+.jury-badge {
+  position: absolute !important;
+  left: 20px;
+  bottom: 20px;
+  z-index: 5 !important;
+  width: auto !important;
+  padding: 8px 14px;
+  border: 1px solid #7cf8e0;
+  border-radius: 999px;
+  background: #00161bdd;
+  color: #7cf8e0;
+  font: 800 11px Montserrat;
+  letter-spacing: 3px;
+}
+.challenge-scene,
+.idol-discovery {
+  position: fixed;
+  inset: 0;
+  z-index: 108;
+  overflow: hidden;
+  background:
+    linear-gradient(#00191f66, #001116d9),
+    url("island-hero.png") center/cover;
+}
+.challenge-scene:after,
+.idol-discovery:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background:
+    linear-gradient(90deg, #45ffda10 1px, transparent 1px),
+    linear-gradient(#45ffda09 1px, transparent 1px);
+  background-size: 70px 70px;
+  mix-blend-mode: screen;
+  animation: scanGrid 8s linear infinite;
+}
+.challenge-scene > button,
+.idol-discovery > button {
+  position: absolute;
+  z-index: 7;
+  right: 22px;
+  top: 22px;
+}
+.challenge-hud,
+.idol-discovery-hud {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(850px, 90vw);
+  padding: 14px 28px;
+  text-align: center;
+  border: 1px solid #7dffe877;
+  border-radius: 18px;
+  background: #00171ddd;
+  box-shadow: 0 24px 80px #000;
+  backdrop-filter: blur(10px);
+}
+.challenge-hud h1,
+.idol-discovery-hud h1 {
+  margin: 4px;
+  font: 900 clamp(28px, 6vw, 68px) Montserrat;
+}
+.challenge-hud p,
+.idol-discovery-hud p {
+  margin: 4px;
+  color: var(--gold);
+}
+.idol-discovery {
+  background:
+    radial-gradient(circle at 50% 55%, #aa742244, #001116e8 60%),
+    url("council-stage.png") center/cover;
+}
+.idol-discovery-hud > span {
+  color: #ffd766;
+  font-weight: 900;
+  letter-spacing: 5px;
+}
+.idol-play-list {
+  margin: 12px 0;
+  padding: 12px;
+  color: #ffe796;
+  border: 1px solid #f7c14c66;
+  background: #553d1022;
+  border-radius: 10px;
+}
+.cast-count {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+.cast-count label {
+  display: grid;
+  gap: 5px;
+  color: var(--aqua);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.cast-count select {
+  min-width: 145px;
+  font-size: 15px;
 }
 .council h1 {
   font: 900 clamp(25px, 5vw, 60px) Montserrat;
@@ -532,6 +895,137 @@ select {
   border-left: 3px solid var(--aqua);
   color: white;
   font-size: clamp(18px, 3vw, 28px);
+}
+.top-board,
+.announcement,
+.finale-scene,
+.merge-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  padding: 4vw;
+  background: radial-gradient(circle at 50% 40%, #124a4a, #021116 70%);
+  overflow: auto;
+}
+.top-board > button,
+.finale-scene > button,
+.merge-scene > button {
+  position: fixed;
+  right: 25px;
+  top: 25px;
+  z-index: 4;
+}
+.top-board > div,
+.finale-scene > div,
+.merge-scene > div {
+  text-align: center;
+  width: min(1300px, 96vw);
+}
+.top-board h1,
+.finale-scene h1,
+.merge-scene h1 {
+  font: 900 clamp(45px, 8vw, 100px) Montserrat;
+  margin: 8px;
+}
+.top-board > div > span,
+.finale-scene span,
+.merge-scene span {
+  color: var(--aqua);
+  font-weight: 900;
+  letter-spacing: 5px;
+}
+.top-board section {
+  padding: 12px;
+  border-top: 3px solid var(--c);
+}
+.top-board section h2 {
+  color: var(--c);
+}
+.top-board section > div,
+.final-grid {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.top-board figure,
+.final-grid figure {
+  margin: 0;
+  width: 92px;
+}
+.top-board figure img,
+.final-grid img {
+  width: 82px;
+  height: 105px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid var(--aqua);
+}
+.top-board figure.gone {
+  filter: grayscale(1);
+  opacity: 0.36;
+}
+.top-board figcaption,
+.final-grid figcaption {
+  font-size: 11px;
+  font-weight: 800;
+}
+.announcement {
+  z-index: 105;
+  background:
+    linear-gradient(#001117bb, #001117ee),
+    url("island-hero.png") center/cover;
+}
+.announcement > div {
+  text-align: center;
+  animation: sceneIn 0.7s;
+}
+.announcement i {
+  display: block;
+  font-size: 150px;
+  color: var(--c);
+  filter: drop-shadow(0 0 45px var(--c));
+}
+.announcement h1 {
+  font: 900 clamp(55px, 11vw, 150px) Montserrat;
+  color: var(--c);
+  margin: 0;
+}
+.announcement p {
+  font-size: 20px;
+}
+.finale-scene,
+.merge-scene {
+  background:
+    linear-gradient(#001116a8, #001116ee),
+    url("council-stage.png") center/cover;
+}
+.final-grid.finalists figure {
+  width: min(280px, 29vw);
+}
+.final-grid.finalists img {
+  width: 100%;
+  height: min(48vh, 470px);
+  box-shadow: 0 25px 70px #000;
+}
+.final-grid.finalists figcaption {
+  font: 900 24px Montserrat;
+}
+.final-single {
+  width: min(450px, 75vw);
+  height: 52vh;
+  object-fit: cover;
+  border-radius: 25px;
+  border: 4px solid var(--gold);
+  box-shadow: 0 0 80px #ffc95c;
+}
+.winner-shot {
+  animation: winnerGlow 1.2s infinite alternate;
+}
+.merge-scene h2 {
+  color: var(--gold);
 }
 dialog {
   width: min(760px, 94vw);
@@ -629,6 +1123,31 @@ dialog::backdrop {
     box-shadow: 0 0 80px #ffcb4f55;
   }
 }
+@keyframes avatarBreath {
+  to {
+    transform: scale(1.045) translateY(-3px);
+  }
+}
+@keyframes seatedAvatar {
+  to {
+    transform: perspective(900px) rotateY(2deg) translateY(-5px) scale(1.015);
+  }
+}
+@keyframes idolBurst {
+  from {
+    opacity: 0;
+    transform: scale(0.2) rotate(-40deg);
+  }
+  to {
+    opacity: 0.34;
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes scanGrid {
+  to {
+    transform: perspective(600px) translateY(70px) rotateX(1deg);
+  }
+}
 @media (max-width: 760px) {
   header {
     padding: 0 12px;
@@ -679,5 +1198,43 @@ dialog::backdrop {
   }
   .winner h1 {
     font-size: 42px;
+  }
+  .phase-track {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .top-board figure {
+    width: 65px;
+  }
+  .top-board figure img {
+    width: 60px;
+    height: 78px;
+  }
+  .ranking > div {
+    grid-template-columns: 45px 48px 1fr;
+  }
+  .ranking small {
+    display: none;
+  }
+  .winner-stats {
+    flex-wrap: wrap;
+  }
+  .winner-stats > b {
+    min-width: 90px;
+  }
+  .final-grid.finalists img {
+    height: 35vh;
+  }
+  .council-hud {
+    top: 11vh;
+    padding: 10px 14px;
+  }
+  .council .reveal-portrait {
+    left: 8px;
+    top: auto;
+    bottom: -88px;
+  }
+  .cast-count {
+    width: 100%;
+    justify-content: space-between;
   }
 }

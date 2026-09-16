@@ -1,5 +1,6 @@
 import { createGame, step, pairKey } from "./engine.js";
-const VERSION = "2026.09.15.2",
+import { mountSpirit3D } from "./cinema3d.js";
+const VERSION = "2026.09.16.2",
   files = [
     "Alex.webp",
     "Billy.webp",
@@ -32,6 +33,7 @@ const VERSION = "2026.09.15.2",
     id: "spirit-" + i,
     name: f.split(".")[0].replace(/^./, (c) => c.toUpperCase()),
     image: "characters/" + f,
+    faceImage: `characters/faces/${f.replace(/\.[^.]+$/, "")}.jpg`,
     strategy: 5,
     social: 5,
     competition: 5,
@@ -48,6 +50,7 @@ let state = {
     cinema: true,
   },
   tab = "cast",
+  liveTab = "episode",
   busy = false,
   installPrompt,
   db;
@@ -195,14 +198,28 @@ function syncTribes() {
 function card(p, live = false) {
   const on = state.selected.includes(p.id),
     g = state.game,
-    tribe = g?.tribes.find((t) => t.id === p.tribe);
-  return `<article class="card ${on && !live ? "picked" : ""} ${p.out ? "out" : ""}" style="--tribe:${tribe?.color || "#37e6c4"}"><div class="photo"><img src="${esc(p.image)}" alt="${esc(p.name)}">${live && g.idol.owner === p.id && !g.idol.used ? '<b class="idol">◆ IDOL</b>' : ""}${!live ? `<button data-toggle="${p.id}">${on ? "✓" : "+"}</button>` : ""}</div><h3>${esc(p.name)}</h3><small>${live ? (p.out ? "ΑΠΟΧΩΡΗΣΕ" : g.merge ? "MERGED" : tribe?.name || "ΝΗΣΙ") : "SPIRIT CASTAWAY"}</small></article>`;
+    tribe = g?.tribes.find((t) => t.id === p.tribe),
+    idolCount = live
+      ? (g.idols || []).filter((idol) => !idol.used && idol.owner === p.id)
+          .length
+      : 0;
+  return `<article class="card ${on && !live ? "picked" : ""} ${p.out ? "out" : ""}" style="--tribe:${tribe?.color || "#37e6c4"}"><div class="photo"><img src="${esc(p.image)}" alt="${esc(p.name)}">${idolCount ? `<b class="idol">◆ ${idolCount > 1 ? `${idolCount} IDOLS` : "IDOL"}</b>` : ""}${!live ? `<button data-toggle="${p.id}">${on ? "✓" : "+"}</button>` : ""}</div><h3>${esc(p.name)}</h3><small>${live ? (p.out ? "ΑΠΟΧΩΡΗΣΕ" : g.merge ? "MERGED" : tribe?.name || "ΝΗΣΙ") : "SPIRIT CASTAWAY"}</small></article>`;
 }
 function setup() {
   return `<section class="hero"><span>THE ISLAND IS AWAKE</span><h1>Δημιούργησε τη δική σου θρυλική σεζόν.</h1><p>Φυλές, κλίκες, κρυμμένα idols και μία φλόγα που πρέπει να μείνει αναμμένη.</p></section><nav>${button("01 Παίκτες", "tab-cast", tab === "cast" ? "active" : "")}${button("02 Ομάδες", "tab-tribes", tab === "tribes" ? "active" : "")}${button("03 Φιλίες & κλίκες", "tab-bonds", tab === "bonds" ? "active" : "")}</nav>${tab === "cast" ? castSetup() : tab === "tribes" ? tribeSetup() : bondSetup()}<aside class="launch"><div><b>${state.selected.length}</b><span>CASTAWAYS</span></div><div><b>${state.tribes?.length || 2}</b><span>TRIBES</span></div>${button("Ξεκίνα τη σεζόν ▷", "start", "primary")}</aside>`;
 }
 function castSetup() {
-  return `<div class="title"><h2>Επίλεξε castaways</h2>${button("+ Custom παίκτης", "custom")}</div><div class="grid">${state.players.map((p) => card(p)).join("")}</div>`;
+  return `<div class="title"><div><h2>Επίλεξε castaways</h2><p>Όρισε πρώτα το μέγεθος της σεζόν και μετά άλλαξε όποια πρόσωπα θέλεις.</p></div><div class="cast-count"><label>ΑΡΙΘΜΟΣ ΠΑΙΚΤΩΝ <select data-cast-size>${Array.from(
+    { length: 19 },
+    (_, i) => i + 8,
+  )
+    .map(
+      (n) =>
+        `<option value="${n}" ${state.selected.length === n ? "selected" : ""}>${n} παίκτες</option>`,
+    )
+    .join(
+      "",
+    )}</select></label>${button("+ Custom παίκτης", "custom")}</div></div><div class="grid">${state.players.map((p) => card(p)).join("")}</div>`;
 }
 function tribeSetup() {
   syncTribes();
@@ -235,7 +252,7 @@ function bondSetup() {
     )
     .join(
       "",
-    )}</div><button>+ Δημιουργία κλίκας</button></form><section class="idol-give"><h3>◆ Idol δοκιμής</h3><p>Δώσε το μοναδικό idol σε έναν παίκτη ή άφησέ το κρυμμένο στην παραλία.</p><select id="idol-owner"><option value="">Κρυμμένο</option>${selected()
+    )}</div><button>+ Δημιουργία κλίκας</button></form><section class="idol-give"><h3>◆ Αρχικό Idol δοκιμής</h3><p>Δώσε ένα αρχικό idol σε παίκτη ή άφησέ το παιχνίδι να κρύψει δυναμικά πολλά idols στις παραλίες.</p><select id="idol-owner"><option value="">Κρυμμένο</option>${selected()
     .map(
       (p) =>
         `<option value="${p.id}" ${state.idolOwner === p.id ? "selected" : ""}>${esc(p.name)}</option>`,
@@ -248,20 +265,112 @@ function live() {
   const g = state.game,
     last = g.history.at(-1),
     alive = g.players.filter((p) => !p.out);
-  return `<section class="livebar"><span>● LIVE · EPISODE ${g.episode}</span><b>${g.merge ? "MERGED · INDIVIDUAL GAME" : g.tribes.map((t) => t.name.toUpperCase()).join(" VS ")}</b><div>${button("Νέα σεζόν", "reset")}${!g.merge && g.stage === "challenge" ? button("Επιλογή νικήτριας ομάδας", "choose-tribe") : ""}${g.merge && g.stage === "challenge" ? button("Επιλογή νικητή ασυλίας", "choose-winner") : ""}${button(stageName(g.stage) + " ▷", "next", "primary")}</div></section><div class="grid livegrid">${g.players.map((p) => card(p, true)).join("")}</div>${
-    g.winner
-      ? winnerView(g)
-      : `<section class="episode"><span>ISLAND FEED · ${alive.length} REMAIN</span><h2>${last?.title || "Οι βάρκες πλησιάζουν"}</h2><div class="faces">${(
-          last?.ids || []
-        )
-          .map((id) => {
-            const p = g.players.find((x) => x.id === id);
-            return p ? `<img src="${p.image}" title="${esc(p.name)}">` : "";
-          })
-          .join(
-            "",
-          )}</div><p>${last?.text || "Η σεζόν είναι έτοιμη να αρχίσει."}</p></section>`
-  }`;
+  const content = g.winner
+    ? winnerView(g)
+    : liveTab === "cliques"
+      ? cliqueStats(g)
+      : liveTab === "history"
+        ? historyView(g)
+        : liveTab === "ranking"
+          ? rankingView(g)
+          : eventView(last, g);
+  return `<section class="livebar"><span>● LIVE · EPISODE ${g.episode}</span><b>${g.merge ? "MERGED · INDIVIDUAL GAME" : g.tribes.map((t) => t.name.toUpperCase()).join(" VS ")}</b><div>${button("Νέα σεζόν", "reset")}${!g.merge && g.stage === "challenge" ? button("Επιλογή νικήτριας ομάδας", "choose-tribe") : ""}${g.merge && g.stage === "challenge" ? button("Επιλογή νικητή ασυλίας", "choose-winner") : ""}${!g.winner ? button(stageName(g.stage) + " ▷", "next", "primary") : ""}</div></section><div class="phase-track"><span class="${g.stage === "challenge" ? "on" : ""}">ΑΣΥΛΙΑ</span><span class="${g.stage === "camp" ? "on" : ""}">ΣΥΖΗΤΗΣΕΙΣ</span><span class="${g.stage === "council" ? "on" : ""}">ΣΥΜΒΟΥΛΙΟ</span><span>TOP ${alive.length}</span></div>${groupedPlayers(g)}<nav class="live-tabs">${button("Επεισόδιο", "live-episode", liveTab === "episode" ? "active" : "")}${button("Κλίκες", "live-cliques", liveTab === "cliques" ? "active" : "")}${button("Ιστορικό", "live-history", liveTab === "history" ? "active" : "")}${button("Κατάταξη", "live-ranking", liveTab === "ranking" ? "active" : "")}</nav>${content}`;
+}
+function groupedPlayers(g) {
+  const groups = g.merge
+    ? [
+        {
+          name: "MERGED",
+          title: "Ατομικό παιχνίδι",
+          color: "#ffd36a",
+          members: g.players.map((p) => p.id),
+        },
+      ]
+    : g.tribes;
+  return `<div class="tribe-groups">${groups
+    .map(
+      (t) =>
+        `<section style="--c:${t.color}"><header><div><span>TRIBE</span><h2>${esc(t.name)}</h2><p>${esc(t.title || "")}</p></div><b>${t.members.filter((id) => !g.players.find((p) => p.id === id)?.out).length} ACTIVE</b></header><div class="grid livegrid">${t.members
+          .map((id) => g.players.find((p) => p.id === id))
+          .filter(Boolean)
+          .map((p) => card(p, true))
+          .join("")}</div></section>`,
+    )
+    .join("")}</div>`;
+}
+function eventView(e, g) {
+  const get = (id) => g.players.find((p) => p.id === id);
+  if (!e)
+    return `<section class="episode"><span>ISLAND FEED</span><h2>Οι βάρκες πλησιάζουν</h2><p>Η σεζόν είναι έτοιμη να αρχίσει.</p></section>`;
+  const category = e.final
+    ? "ΤΕΛΙΚΟΣ"
+    : e.evicted
+      ? "ΣΥΜΒΟΥΛΙΟ"
+      : e.immunityAnnouncement
+        ? "ΑΣΥΛΙΑ"
+        : e.merge
+          ? "MERGE"
+          : e.dialogue
+            ? "ΣΥΖΗΤΗΣΕΙΣ"
+            : stageName(e.stage).toUpperCase();
+  return `<section class="episode ${e.idolPlayed || e.idol ? "idol-event" : ""}"><span>EPISODE ${e.episode} · ${esc(category)}</span><h2>${esc(e.title)}</h2><div class="faces">${e.ids.map((id) => (get(id) ? `<img src="${get(id).image}" title="${esc(get(id).name)}">` : "")).join("")}</div><p>${esc(e.text)}</p>${e.idolPlays?.length ? `<div class="idol-play-list">${e.idolPlays.map((x) => `◆ ${esc(get(x.actor)?.name)} σώζει ${esc(get(x.saved)?.name)}`).join("<br>")}</div>` : ""}${e.votes ? `<details open><summary>Ποιος ψήφισε ποιον</summary>${e.votes.map((v) => `<div class="vote-row"><span>${esc(get(v.voter)?.name)}</span><b>→</b><span>${esc(get(v.target)?.name)}</span></div>`).join("")}</details>` : ""}</section>`;
+}
+function historyView(g) {
+  const episodes = [...new Set(g.history.map((e) => e.episode))].reverse();
+  return `<section class="history"><h2>Αρχείο επεισοδίων</h2>${episodes
+    .map(
+      (n) =>
+        `<details ${n === episodes[0] ? "open" : ""}><summary>EPISODE ${n}</summary>${g.history
+          .filter((e) => e.episode === n)
+          .map((e) => eventView(e, g))
+          .join("")}</details>`,
+    )
+    .join("")}</section>`;
+}
+function cliqueStats(g) {
+  const get = (id) => g.players.find((p) => p.id === id);
+  return `<section class="clique-board"><h2>Κλίκες του νησιού</h2><p>Οι ενεργές κλίκες επηρεάζουν τις συζητήσεις, τα idols και κάθε ψήφο.</p>${
+    g.cliques.length
+      ? g.cliques
+          .map(
+            (c) =>
+              `<article class="${c.active ? "active" : "broken"}"><span>${c.active ? "● ΕΝΕΡΓΗ" : "✕ ΔΙΑΛΥΘΗΚΕ"}</span><h3>${esc(c.name)}</h3><div class="faces">${c.members
+                .map(get)
+                .filter(Boolean)
+                .map((p) => `<img src="${p.image}" title="${esc(p.name)}">`)
+                .join("")}</div><p>${c.members
+                .map((id) => get(id)?.name)
+                .filter(Boolean)
+                .join(" · ")}</p></article>`,
+          )
+          .join("")
+      : '<p class="empty">Δεν υπάρχουν ακόμα κλίκες.</p>'
+  }</section>`;
+}
+function rankingView(g) {
+  const get = (id) => g.players.find((p) => p.id === id),
+    rows = [];
+  if (g.winner && g.finalData) {
+    rows.push(
+      { id: g.winner, place: 1 },
+      { id: g.finalData.finalTwo.find((id) => id !== g.winner), place: 2 },
+      { id: g.finalData.third, place: 3 },
+    );
+  }
+  g.order.forEach((id, i) => rows.push({ id, place: g.players.length - i }));
+  if (!g.winner)
+    g.players
+      .filter((p) => !p.out)
+      .forEach((p) => rows.unshift({ id: p.id, place: "—" }));
+  const unique = rows.filter(
+    (r, i) => rows.findIndex((x) => x.id === r.id) === i,
+  );
+  return `<section class="ranking"><h2>Κατάταξη σεζόν</h2>${unique
+    .map((r) => {
+      const p = get(r.id);
+      return `<div><b>${r.place === 1 ? "🏆" : r.place}.</b><img src="${p.image}"><span>${esc(p.name)}</span><small>${r.place === "—" ? "Ακόμα στο παιχνίδι" : r.place === 1 ? "Νικητής" : `Θέση ${r.place}`}</small></div>`;
+    })
+    .join("")}</section>`;
 }
 const stageName = (s) =>
   ({
@@ -273,7 +382,7 @@ const stageName = (s) =>
   })[s] || "Συνέχεια";
 function winnerView(g) {
   const w = g.players.find((p) => p.id === g.winner);
-  return `<section class="winner"><span>SOLE SPIRIT OF THE ISLAND</span><img src="${w.image}"><h1>${esc(w.name)}</h1><p>Νικητής με την ψήφο όσων έφτασαν στο Merge.</p></section>`;
+  return `<section class="winner"><span>SOLE SPIRIT OF THE ISLAND</span><img src="${w.image}"><h1>${esc(w.name)}</h1><p>Νικητής με την ψήφο όλων των αποχωρησάντων.</p><div class="winner-stats"><b>${w.wins}<small>ΝΙΚΕΣ</small></b><b>${w.strategy}/10<small>ΣΤΡΑΤΗΓΙΚΗ</small></b><b>${w.social}/10<small>ΚΟΙΝΩΝΙΚΟΤΗΤΑ</small></b></div></section>${eventView(g.history.at(-1), g)}${rankingView(g)}`;
 }
 function render() {
   syncTribes();
@@ -289,6 +398,8 @@ function bind() {
     (b) =>
       (b.onclick = () => {
         const id = b.dataset.toggle;
+        if (!state.selected.includes(id) && state.selected.length >= 26)
+          return toast("Το μέγιστο είναι 26 παίκτες.");
         state.selected = state.selected.includes(id)
           ? state.selected.filter((x) => x !== id)
           : [...state.selected, id];
@@ -297,6 +408,23 @@ function bind() {
         render();
       }),
   );
+  const castSize = app.querySelector("[data-cast-size]");
+  if (castSize)
+    castSize.onchange = () => {
+      const size = +castSize.value,
+        current = state.selected.filter((id) =>
+          state.players.some((p) => p.id === id),
+        ),
+        additions = state.players
+          .filter((p) => !current.includes(p.id))
+          .map((p) => p.id);
+      state.selected = current.slice(0, size);
+      while (state.selected.length < size && additions.length)
+        state.selected.push(additions.shift());
+      syncTribes();
+      save();
+      render();
+    };
   app
     .querySelectorAll("[data-preset]")
     .forEach((b) => (b.onclick = () => setPreset(b.dataset.preset)));
@@ -436,57 +564,317 @@ async function councilReveal(e) {
   const g = state.game,
     ov = document.createElement("div");
   ov.className = "council";
-  ov.innerHTML =
-    "<div><span>ΤΟ ΣΥΜΒΟΥΛΙΟ ΑΠΟΦΑΣΙΣΕ</span><h1></h1><img><p></p></div><button>Συνέχεια</button>";
+  ov.innerHTML = `<div class="council-stage3d"></div><div class="council-hud"><span>● LIVE · ΣΥΜΒΟΥΛΙΟ ΤΟΥ ΝΗΣΙΟΥ</span><h1>Οι παίκτες παίρνουν τις θέσεις τους</h1><img class="reveal-portrait"><p>Η ψηφοφορία αρχίζει.</p></div><div class="jury-badge">JURY · ${Math.max(0, g.jury.length - 1)}</div><button>Παράλειψη σκηνής</button>`;
   document.body.append(ov);
-  const h = ov.querySelector("h1"),
-    img = ov.querySelector("img"),
-    p = ov.querySelector("p"),
-    wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let skipped = false;
+  ov.querySelector("button").onclick = () => (skipped = true);
+  const h = ov.querySelector(".council-hud h1"),
+    img = ov.querySelector(".reveal-portrait"),
+    p = ov.querySelector(".council-hud p"),
+    wait = (ms) => new Promise((r) => setTimeout(r, skipped ? 60 : ms)),
+    participantIds = [
+      ...new Set([
+        ...e.votes.map((v) => v.voter),
+        ...e.safeOrder,
+        ...(e.idolSaved ? [e.idolSaved] : []),
+        ...(e.idolPlays || []).map((play) => play.actor),
+        e.evicted,
+        ...g.jury.filter((id) => id !== e.evicted),
+      ]),
+    ],
+    participants = participantIds
+      .map((id) => g.players.find((x) => x.id === id))
+      .filter(Boolean),
+    colors = Object.fromEntries(g.tribes.map((t) => [t.id, t.color])),
+    stage = await mountSpirit3D(
+      ov.querySelector(".council-stage3d"),
+      participants,
+      {
+        mode: "council",
+        jury: g.jury.filter((id) => id !== e.evicted),
+        colors,
+      },
+    );
+  await wait(900);
+  for (const line of e.councilDialogue || []) {
+    if (skipped) break;
+    const speaker = g.players.find((x) => x.name === line.speaker);
+    stage.speak(speaker?.id);
+    h.textContent = line.speaker;
+    img.src = speaker?.image || "icon.svg";
+    img.classList.add("visible");
+    p.textContent = `“${line.text}”`;
+    await wait(1900);
+  }
+  for (const vote of e.votes) {
+    if (skipped) break;
+    const voter = g.players.find((x) => x.id === vote.voter);
+    h.textContent = `${voter.name} σηκώνεται για να ψηφίσει`;
+    img.src = voter.image;
+    img.classList.add("visible");
+    p.textContent = "Η ψήφος παραμένει μυστική μέχρι την αποκάλυψη.";
+    await stage.vote(voter.id);
+  }
+  img.classList.remove("visible");
+  h.textContent = "Η κάλπη σφραγίστηκε";
+  p.textContent = "Οι φλόγες θα αποκαλύψουν την απόφαση.";
+  await wait(1000);
   for (const id of e.safeOrder) {
     const x = g.players.find((q) => q.id === id);
     h.textContent = "Ο επόμενος που παραμένει είναι… " + x.name;
     img.src = x.image;
+    img.classList.add("visible");
     p.textContent = "Η φλόγα σου συνεχίζει.";
     await wait(1200);
+  }
+  const idolPlays = e.idolPlays?.length
+    ? e.idolPlays
+    : e.idolPlayed
+      ? [{ actor: e.idolPlayed, saved: e.idolSaved }]
+      : [];
+  for (let idolIndex = 0; idolIndex < idolPlays.length; idolIndex++) {
+    const play = idolPlays[idolIndex],
+      actor = g.players.find((q) => q.id === play.actor),
+      saved = g.players.find((q) => q.id === play.saved);
+    h.textContent = `${saved.name}, η απόφαση φαίνεται οριστική…`;
+    img.src = saved.image;
+    p.textContent = "Η φλόγα ετοιμάζεται να σβήσει.";
+    await wait(1800);
+    ov.classList.add("idol-twist");
+    stage.idolBurst(actor.id);
+    h.textContent = `${idolIndex ? "ΚΙ ΑΛΛΟ IDOL!" : "Μισό λεπτό — έχει γίνει κάποιο λάθος!"}`;
+    img.src = actor.image;
+    p.innerHTML = `◆ ${esc(actor.name)} ΕΚΑΝΕ ΧΡΗΣΗ IDOL<br>${esc(saved.name)}, η φλόγα σου παραμένει αναμμένη.`;
+    await wait(3600);
+    ov.classList.remove("idol-twist");
+    h.textContent = "Οι ψήφοι του Idol ακυρώθηκαν. Αποχωρεί ο επόμενος…";
+    p.textContent = "Το Συμβούλιο αλλάζει απόφαση.";
+    await wait(1800);
   }
   const out = g.players.find((q) => q.id === e.evicted);
   h.textContent = out.name;
   img.src = out.image;
   p.textContent = `Η φλόγα σου σβήνει · Θέση ${e.place}`;
+  await wait(1200);
+  h.textContent = `${out.name}, πάρε τη δάδα σου`;
+  p.textContent = `Αποχωρεί από το νησί και παίρνει τη θέση ${e.place}.`;
+  await stage.exit(out.id);
+  await wait(650);
+  stage.dispose();
+  ov.remove();
+  await topBoard();
+  await intro();
+}
+async function topBoard() {
+  if (!state.cinema) return;
+  const g = state.game,
+    alive = g.players.filter((p) => !p.out),
+    ov = document.createElement("div");
+  ov.className = "top-board";
+  ov.innerHTML = `<button>Συνέχεια</button><div><span>THE GAME CONTINUES</span><h1>TOP ${alive.length}</h1>${g.tribes
+    .map(
+      (t) =>
+        `<section style="--c:${t.color}"><h2>${esc(t.name)}</h2><div>${t.members
+          .map((id) => g.players.find((p) => p.id === id))
+          .filter(Boolean)
+          .map(
+            (p) =>
+              `<figure class="${p.out ? "gone" : ""}"><img src="${p.image}"><figcaption>${esc(p.name)}</figcaption></figure>`,
+          )
+          .join("")}</div></section>`,
+    )
+    .join("")}</div>`;
+  document.body.append(ov);
   await new Promise((resolve) => {
-    const t = setTimeout(resolve, 3500);
+    const timer = setTimeout(resolve, 4500);
     ov.querySelector("button").onclick = () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       resolve();
     };
   });
   ov.remove();
-  await intro();
 }
-async function dialogueScene(e) {
-  if (!state.cinema || !e?.dialogue?.length) return;
-  const ov = document.createElement("div");
-  ov.className = "council pov";
-  ov.innerHTML =
-    "<div><span>● LIVE · ISLAND CAM</span><h1></h1><img><p></p></div><button>Παράλειψη</button>";
+async function announcementScene(e) {
+  if (!state.cinema || !e?.immunityAnnouncement) return;
+  const g = state.game,
+    tribe = g.tribes.find((t) => t.id === e.tribe),
+    ov = document.createElement("div");
+  ov.className = "announcement";
+  ov.innerHTML = `<div style="--c:${tribe?.color || "#ffd36a"}"><span>IMMUNITY</span><i>◇</i><h1>${esc(tribe?.name || g.players.find((p) => p.id === e.ids[0])?.name)}</h1><p>${esc(e.text)}</p></div>`;
+  document.body.append(ov);
+  await new Promise((r) => setTimeout(r, 3000));
+  ov.remove();
+}
+async function challengeScene(e) {
+  if (!state.cinema || !e?.immunityAnnouncement) return;
+  const g = state.game,
+    ov = document.createElement("div"),
+    alive = g.players.filter((p) => !p.out),
+    colors = Object.fromEntries(g.tribes.map((t) => [t.id, t.color]));
+  ov.className = "challenge-scene";
+  ov.innerHTML = `<div class="challenge-stage3d"></div><div class="challenge-hud"><span>● LIVE · ${g.merge ? "ΑΤΟΜΙΚΗ" : "ΟΜΑΔΙΚΗ"} ΑΣΥΛΙΑ</span><h1>${esc(e.challengeName || "ΔΟΚΙΜΑΣΙΑ ΑΣΥΛΙΑΣ")}</h1><p>${{ race: "Ταχύτητα · εμπόδια · τερματισμός", balance: "Ισορροπία · συγκέντρωση · ψυχραιμία", puzzle: "Στρατηγική · συναρμολόγηση · ταχύτητα", endurance: "Αντοχή · θέληση · τελευταίος όρθιος", memory: "Μνήμη · κρύσταλλοι · σωστή ακολουθία", totem: "Αναζήτηση · ευστοχία · τοτέμ" }[e.challengeType] || "Δύναμη · στρατηγική · αντοχή"}</p></div><button>Παράλειψη</button>`;
+  document.body.append(ov);
+  const stage = await mountSpirit3D(
+    ov.querySelector(".challenge-stage3d"),
+    alive,
+    {
+      mode: "challenge",
+      colors,
+      challengeType: e.challengeType,
+    },
+  );
+  let done = false,
+    skip;
+  const skipped = new Promise((resolve) => (skip = resolve));
+  ov.querySelector("button").onclick = () => {
+    done = true;
+    skip();
+  };
+  await Promise.race([stage.playChallenge(e.ids || []), skipped]);
+  if (done) {
+    stage.dispose();
+    ov.remove();
+    return;
+  }
+  ov.querySelector(".challenge-hud h1").textContent =
+    "Η ΔΟΚΙΜΑΣΙΑ ΟΛΟΚΛΗΡΩΘΗΚΕ";
+  ov.querySelector(".challenge-hud p").textContent =
+    "Η ασυλία έχει νέο κάτοχο.";
+  await new Promise((r) => setTimeout(r, 1300));
+  stage.dispose();
+  ov.remove();
+}
+async function idolDiscoveryScene(e) {
+  if (!state.cinema || !e?.idol || !e.idolOwner) return;
+  const g = state.game,
+    finder = g.players.find((p) => p.id === e.idolOwner),
+    ov = document.createElement("div");
+  if (!finder) return;
+  ov.className = "idol-discovery";
+  ov.innerHTML = `<div class="idol-stage3d"></div><div class="idol-discovery-hud"><span>SECRET SCENE</span><h1>ΕΝΑ IDOL ΞΥΠΝΗΣΕ</h1><p>${esc(finder.name)} ανακάλυψε ένα κρυμμένο φυλαχτό.</p></div><button>Συνέχεια</button>`;
+  document.body.append(ov);
+  const stage = await mountSpirit3D(
+    ov.querySelector(".idol-stage3d"),
+    [finder],
+    {
+      mode: "council",
+    },
+  );
+  stage.idolBurst(finder.id);
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 4200);
+    ov.querySelector("button").onclick = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+  });
+  stage.dispose();
+  ov.remove();
+}
+async function finalReveal(e) {
+  if (!state.cinema || !e?.final) return;
+  const g = state.game,
+    get = (id) => g.players.find((p) => p.id === id),
+    ov = document.createElement("div");
+  ov.className = "finale-scene";
+  ov.innerHTML = "<button>Παράλειψη</button><div></div>";
   document.body.append(ov);
   let stopped = false;
   ov.querySelector("button").onclick = () => {
     stopped = true;
     ov.remove();
   };
+  const box = ov.querySelector("div"),
+    wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  box.innerHTML = `<span>THE JURY</span><h1>Όλοι οι αποχωρήσαντες ψηφίζουν</h1><div class="final-grid">${e.voters.map((id) => `<figure><img src="${get(id).image}"><figcaption>${esc(get(id).name)}</figcaption></figure>`).join("")}</div>`;
+  await wait(3600);
+  if (stopped) return;
+  box.innerHTML = `<span>FINAL THREE</span><h1>Οι τρεις φιναλίστ</h1><div class="final-grid finalists">${g.finalists.map((id) => `<figure><img src="${get(id).image}"><figcaption>${esc(get(id).name)}</figcaption></figure>`).join("")}</div>`;
+  await wait(3200);
+  if (stopped) return;
+  const third = get(e.third);
+  box.innerHTML = `<span>3Η ΘΕΣΗ</span><h1>${esc(third.name)}</h1><img class="final-single" src="${third.image}"><p>${e.tally.find((x) => x.id === third.id).n} ψήφοι</p>`;
+  await wait(3000);
+  if (stopped) return;
+  box.innerHTML = `<span>FINAL TWO</span><h1>Μεταξύ των…</h1><div class="final-grid finalists">${e.finalTwo.map((id) => `<figure><img src="${get(id).image}"><figcaption>${esc(get(id).name)}</figcaption></figure>`).join("")}</div>`;
+  await wait(3000);
+  if (stopped) return;
+  const winner = get(g.winner);
+  box.innerHTML = `<span>SOLE SPIRIT OF THE ISLAND</span><h1>Ο ΝΙΚΗΤΗΣ ΕΙΝΑΙ…<br>${esc(winner.name)}</h1><img class="final-single winner-shot" src="${winner.image}"><p>${e.tally.find((x) => x.id === winner.id).n} ψήφοι νίκης</p>`;
+  await wait(5000);
+  if (!stopped) ov.remove();
+}
+async function mergeReveal(e) {
+  if (!state.cinema || !e?.merge) return;
+  const g = state.game,
+    ov = document.createElement("div");
+  ov.className = "merge-scene";
+  ov.innerHTML = `<button>Συνέχεια</button><div><span>THE MERGE</span><h1>ΤΟ ΠΑΙΧΝΙΔΙ ΓΙΝΕΤΑΙ ΑΤΟΜΙΚΟ</h1>${e.returned?.length ? `<h2>ΕΠΙΣΤΡΕΦΟΥΝ: ${e.returned.map((id) => esc(g.players.find((p) => p.id === id)?.name)).join(" & ")}</h2>` : ""}<div class="final-grid">${g.players
+    .filter((p) => !p.out)
+    .map(
+      (p) =>
+        `<figure><img src="${p.image}"><figcaption>${esc(p.name)}</figcaption></figure>`,
+    )
+    .join(
+      "",
+    )}</div><p>Αυτοί είναι οι παίκτες που έφτασαν στα ατομικά.</p></div>`;
+  document.body.append(ov);
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 6000);
+    ov.querySelector("button").onclick = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+  });
+  ov.remove();
+}
+async function dialogueScene(e) {
+  if (!state.cinema || !e?.dialogue?.length) return;
+  const g = state.game,
+    ov = document.createElement("div"),
+    speakers = [
+      ...new Set(
+        e.dialogue
+          .map((line) => g.players.find((p) => p.name === line.speaker)?.id)
+          .filter(Boolean),
+      ),
+    ]
+      .map((id) => g.players.find((p) => p.id === id))
+      .filter(Boolean),
+    colors = Object.fromEntries(g.tribes.map((t) => [t.id, t.color]));
+  ov.className = "council pov";
+  ov.innerHTML = `<div class="dialogue-stage3d"></div><div class="council-hud dialogue-hud"><span>● LIVE · ISLAND CAM</span><h1></h1><img class="reveal-portrait visible"><p></p></div><button>Παράλειψη</button>`;
+  document.body.append(ov);
+  const stage = await mountSpirit3D(
+    ov.querySelector(".dialogue-stage3d"),
+    speakers,
+    { mode: "council", colors },
+  );
+  let stopped = false;
+  ov.querySelector("button").onclick = () => {
+    stopped = true;
+    stage.dispose();
+    ov.remove();
+  };
   for (const line of e.dialogue) {
     if (stopped) return;
     const player = state.game.players.find((p) => p.name === line.speaker);
-    ov.querySelector("h1").textContent = line.speaker;
-    ov.querySelector("img").src = player?.image || "icon.svg";
-    ov.querySelector("p").textContent = `“${line.text}”`;
+    stage.speak(player?.id);
+    ov.querySelector(".dialogue-hud h1").textContent = line.speaker;
+    ov.querySelector(".dialogue-hud img").src = player?.image || "icon.svg";
+    ov.querySelector(".dialogue-hud p").textContent = `“${line.text}”`;
     await new Promise((resolve) => setTimeout(resolve, 2200));
   }
-  if (!stopped) ov.remove();
+  if (!stopped) {
+    stage.dispose();
+    ov.remove();
+  }
 }
 async function action(a) {
+  if (a.startsWith("live-")) {
+    liveTab = a.slice(5);
+    return render();
+  }
   if (a.startsWith("tab-")) {
     tab = a.slice(4);
     return render();
@@ -532,7 +920,13 @@ async function action(a) {
         state.tribes.flatMap((t) => t.members.map((id) => [id, t.id])),
       ),
       ps = selected().map((p) => ({ ...p, tribe: map.get(p.id) }));
-    state.game = createGame(ps, state.tribes, state.bonds, state.idolOwner);
+    state.game = createGame(
+      ps,
+      state.tribes,
+      state.bonds,
+      state.idolOwner,
+      state.alliances,
+    );
     save();
     render();
     return intro();
@@ -556,11 +950,22 @@ async function action(a) {
       save();
       render();
       if (e?.evicted) await councilReveal(e);
-      else if (e?.merge || e?.returned) await intro();
+      else if (e?.final) await finalReveal(e);
+      else if (e?.merge) {
+        await mergeReveal(e);
+        await intro();
+      } else if (e?.immunityAnnouncement) {
+        await challengeScene(e);
+        await announcementScene(e);
+      } else if (e?.idol) await idolDiscoveryScene(e);
       else await dialogueScene(e);
     } catch (err) {
       console.error(err);
-      document.querySelectorAll(".intro,.council").forEach((x) => x.remove());
+      document
+        .querySelectorAll(
+          ".intro,.council,.challenge-scene,.idol-discovery,.announcement,.merge-scene,.finale-scene,.top-board",
+        )
+        .forEach((x) => x.remove());
       toast("Η ροή αποκαταστάθηκε. Πάτησε ξανά.");
     } finally {
       busy = false;
@@ -589,7 +994,8 @@ function customPlayer() {
         custom: true,
       };
       state.players.push(p);
-      state.selected.push(p.id);
+      if (state.selected.length < 26) state.selected.push(p.id);
+      else toast("Ο παίκτης αποθηκεύτηκε. Το ενεργό cast έχει ήδη 26 άτομα.");
       syncTribes();
       save();
       modal.close();
@@ -608,24 +1014,50 @@ document.querySelector("#install").onclick = async () => {
     installPrompt = null;
   } else toast("Στο iPhone: Share → Add to Home Screen");
 };
-document.querySelector("#update").onclick = async () => {
-  const v = await fetch(`version.json?${Date.now()}`, {
-    cache: "no-store",
-  }).then((r) => r.json());
-  if (v.version !== VERSION) {
-    for (const r of await navigator.serviceWorker.getRegistrations())
-      await r.unregister();
-    for (const c of await caches.keys()) await caches.delete(c);
-    location.reload();
-  } else toast("Έχεις την τελευταία έκδοση.");
-};
+async function checkForUpdate(manual = false) {
+  toast("Έλεγχος για ενημερωμένη έκδοση…");
+  try {
+    const v = await fetch(`version.json?${Date.now()}`, {
+      cache: "no-store",
+    }).then((r) => r.json());
+    if (v.version !== VERSION) {
+      toast("Βρέθηκε ενημέρωση · εγκατάσταση…");
+      for (const registration of await navigator.serviceWorker.getRegistrations())
+        await registration.unregister();
+      for (const cache of await caches.keys()) await caches.delete(cache);
+      location.replace(
+        `${location.pathname}?version=${encodeURIComponent(v.version)}`,
+      );
+      return;
+    }
+    if (manual) toast("Έχεις την τελευταία έκδοση.");
+  } catch {
+    if (manual) toast("Δεν ήταν δυνατός ο έλεγχος. Δοκίμασε ξανά.");
+  }
+}
+document.querySelector("#update").onclick = () => checkForUpdate(true);
 await ready;
 state.bonds ||= {};
 state.alliances ||= [];
 state.selected ||= defaults.slice(0, 16).map((p) => p.id);
 state.players ||= defaults;
+for (const standard of defaults) {
+  const saved = state.players.find((p) => p.id === standard.id);
+  if (saved && !saved.custom) saved.faceImage = standard.faceImage;
+}
 state.tribes ||= [];
+if (state.game) {
+  state.game.cliques ||= structuredClone(state.alliances).map((c, i) => ({
+    id: c.id || `clique-${i}`,
+    name: c.name,
+    members: [...c.members],
+    active: true,
+    createdEpisode: 1,
+  }));
+  state.game.mergePending ||= false;
+}
 syncTribes();
 render();
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
+setTimeout(() => checkForUpdate(false), 350);
