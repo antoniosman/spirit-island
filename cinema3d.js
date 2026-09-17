@@ -75,8 +75,8 @@ async function cutoutMaterial(url, fallbackUrl = null) {
     const source = await loadTexture(url),
       image = source.image,
       canvas = document.createElement("canvas"),
-      width = 256,
-      height = 448;
+      width = 512,
+      height = 896;
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d"),
@@ -108,7 +108,7 @@ async function cutoutMaterial(url, fallbackUrl = null) {
     source.dispose();
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 8;
+    texture.anisotropy = 16;
     return new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,

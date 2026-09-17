@@ -1,6 +1,6 @@
 import { createGame, step, pairKey } from "./engine.js";
 import { mountSpirit3D } from "./cinema3d.js";
-const VERSION = "2026.09.17.3",
+const VERSION = "2026.09.17.4",
   files = [
     "Alex.webp",
     "Billy.webp",
