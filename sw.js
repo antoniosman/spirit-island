@@ -1,4 +1,4 @@
-const CACHE = "spirit-island-v8";
+const CACHE = "spirit-island-v9";
 const CORE = [
   "./",
   "index.html",
@@ -16,7 +16,7 @@ const CORE = [
   "apple-touch-icon.png",
   "island-hero.png",
   "council-stage.png",
-  "intro_music.mp3",
+  "island_intro_music.mp3",
   "characters/faces/Alex.jpg",
   "characters/faces/Billy.jpg",
   "characters/faces/Catherine.jpg",

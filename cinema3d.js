@@ -992,8 +992,27 @@ export async function mountSpirit3D(root, players, options = {}) {
     if (host) {
       const hr = host.userData.rig;
       hr.head.rotation.y = Math.sin(t * 0.58) * 0.12;
-      hr.leftArm.rotation.x = -0.72 + Math.sin(t * 1.4) * 0.16;
-      hr.rightArm.rotation.x = -0.72 - Math.sin(t * 1.4) * 0.16;
+      if (host.userData.action === "announce") {
+        hr.leftArm.rotation.x = -0.55;
+        hr.rightArm.rotation.x = -1.78 + Math.sin(t * 2.2) * 0.14;
+        hr.rightArm.rotation.z = -0.34;
+      } else if (host.userData.action === "suspense") {
+        hr.leftArm.rotation.x = -1.36;
+        hr.rightArm.rotation.x = -1.36;
+        hr.leftArm.rotation.z = 0.42;
+        hr.rightArm.rotation.z = -0.42;
+        hr.head.rotation.x = 0.14;
+      } else if (host.userData.action === "shock") {
+        hr.leftArm.rotation.z = 1.7;
+        hr.rightArm.rotation.z = -1.7;
+        hr.head.rotation.y = Math.sin(t * 4.2) * 0.28;
+      } else {
+        hr.leftArm.rotation.x = -0.72 + Math.sin(t * 1.4) * 0.16;
+        hr.rightArm.rotation.x = -0.72 - Math.sin(t * 1.4) * 0.16;
+        hr.leftArm.rotation.z = 0;
+        hr.rightArm.rotation.z = 0;
+        hr.head.rotation.x = 0;
+      }
     }
     scene.traverse((o) => {
       if (o.userData.flame) o.scale.y = 0.8 + Math.random() * 0.38;
@@ -1043,6 +1062,13 @@ export async function mountSpirit3D(root, players, options = {}) {
 
   return {
     avatars: avatarMap,
+    hostCue(kind = "present", duration = 1200) {
+      if (!host) return;
+      host.userData.action = kind;
+      setTimeout(() => {
+        if (!disposed && host) host.userData.action = "present";
+      }, duration);
+    },
     async vote(id) {
       const a = avatarMap.get(id);
       if (!a) return;

@@ -1,6 +1,6 @@
 import { createGame, step, pairKey } from "./engine.js";
 import { mountSpirit3D } from "./cinema3d.js";
-const VERSION = "2026.09.17.2",
+const VERSION = "2026.09.17.3",
   files = [
     "Alex.webp",
     "Billy.webp",
@@ -591,12 +591,12 @@ async function intro() {
   if (!state.cinema) return;
   const g = state.game,
     overlay = document.createElement("div"),
-    music = new Audio("intro_music.mp3");
+    music = new Audio("island_intro_music.mp3");
   music.loop = true;
-  music.volume = 0.62;
+  music.volume = 0.68;
   overlay.className = "intro";
   overlay.innerHTML =
-    '<button>SKIP INTRO</button><div class="introcontent"></div>';
+    '<div class="intro-live"><i></i> SPIRIT ISLAND · LIVE OPENING</div><button>SKIP INTRO</button><div class="introcontent"></div>';
   document.body.append(overlay);
   music.play().catch(() => {});
   let stop = false;
@@ -610,11 +610,47 @@ async function intro() {
     finish();
   };
   const box = overlay.querySelector(".introcontent"),
-    wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  for (const t of g.tribes) {
+    wait = (ms) => new Promise((r) => setTimeout(r, ms)),
+    startedAt = performance.now(),
+    swapScene = async (html, kind) => {
+      box.classList.remove("intro-visible");
+      box.classList.add("intro-leaving");
+      await wait(360);
+      if (stop) return;
+      box.className = `introcontent ${kind || ""}`;
+      box.innerHTML = html;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => box.classList.add("intro-visible")),
+      );
+      await wait(420);
+    },
+    waitForMusic = (seconds) =>
+      new Promise((resolve) => {
+        const tick = () => {
+          if (
+            stop ||
+            (!music.paused && music.currentTime >= seconds) ||
+            performance.now() - startedAt >= seconds * 1000
+          )
+            return resolve();
+          setTimeout(tick, 45);
+        };
+        tick();
+      });
+  await swapScene(
+    `<div class="intro-brand-card"><div class="intro-eye"><span></span></div><p>THE ISLAND IS WATCHING</p><h1>SPIRIT <strong>ISLAND</strong></h1><b>EPISODE ${g.episode || 1}</b></div>`,
+    "intro-brand",
+  );
+  await wait(1850);
+  for (let tribeIndex = 0; tribeIndex < g.tribes.length; tribeIndex++) {
+    const t = g.tribes[tribeIndex];
     if (stop) return;
-    box.innerHTML = `<div class="tribemark" style="--c:${t.color}"><i>◇</i><h1>${esc(t.name)}</h1><p>${esc(t.title)}</p></div>`;
-    await wait(1800);
+    await swapScene(
+      `<div class="tribemark" style="--c:${t.color}"><small>ΟΜΑΔΑ ${tribeIndex + 1}</small><i>◇</i><h1>${esc(t.name)}</h1><p>${esc(t.title)}</p><em>ENTER THE ISLAND</em></div>`,
+      "intro-team",
+    );
+    if (tribeIndex === 0) await waitForMusic(6.25);
+    else await wait(1550);
     const members = [...g.players.filter((p) => p.tribe === t.id)].sort(
       () => Math.random() - 0.5,
     );
@@ -622,10 +658,18 @@ async function intro() {
       if (stop) return;
       const ix = g.order.indexOf(p.id),
         place = ix < 0 ? null : g.players.length - ix;
-      box.innerHTML = `<div class="introperson ${p.out ? "gone" : ""}" style="--c:${t.color}">${portraitMarkup(p)}<h1>${esc(p.name)} ${place ? `<small>ΘΕΣΗ ${place}</small>` : ""}</h1><b>${esc(t.name)}</b></div>`;
-      await wait(1700);
+      await swapScene(
+        `<div class="introperson ${p.out ? "gone" : ""}" style="--c:${t.color}"><div class="intro-player-frame">${portraitMarkup(p)}<span>${p.out ? `ΤΕΡΜΑΤΙΣΕ · ΘΕΣΗ ${place}` : "CASTAWAY"}</span></div><h1>${esc(p.name)} ${place ? `<small>ΘΕΣΗ ${place}</small>` : ""}</h1><b>${esc(t.name)}</b></div>`,
+        "intro-player",
+      );
+      await wait(1900);
     }
   }
+  await swapScene(
+    `<div class="intro-brand-card intro-end"><p>THE GAME CONTINUES</p><h1>SPIRIT <strong>ISLAND</strong></h1><b>EPISODE ${g.episode || 1}</b></div>`,
+    "intro-brand",
+  );
+  await wait(900);
   if (!stop) finish();
 }
 async function councilReveal(e) {
@@ -633,15 +677,50 @@ async function councilReveal(e) {
   const g = state.game,
     ov = document.createElement("div");
   ov.className = "council";
-  ov.innerHTML = `<div class="council-stage3d"></div><div class="council-hud"><span>● LIVE · ΣΥΜΒΟΥΛΙΟ ΤΟΥ ΝΗΣΙΟΥ</span><div class="marshmallow-badge"><i></i><b>SAFE</b></div><h1>Οι παίκτες παίρνουν τις θέσεις τους</h1><img class="reveal-portrait"><p>Η ψηφοφορία αρχίζει.</p></div><div class="jury-badge">JURY · ${Math.max(0, g.jury.length - 1)}</div><button>Παράλειψη σκηνής</button>`;
+  ov.innerHTML = `<div class="council-stage3d"></div><div class="council-hud"><div class="council-live-row"><span>● LIVE · ΣΥΜΒΟΥΛΙΟ ΤΟΥ ΝΗΣΙΟΥ</span><div class="council-tension"><b>ΕΝΤΑΣΗ</b><i></i></div></div><div class="marshmallow-badge"><i></i><b>SAFE</b></div><h1>Οι παίκτες παίρνουν τις θέσεις τους</h1><img class="reveal-portrait"><p>Η ψηφοφορία αρχίζει.</p><button type="button" class="council-advance">ΑΠΟΚΑΛΥΨΗ ΤΩΡΑ</button></div><div class="jury-badge">JURY · ${Math.max(0, g.jury.length - 1)}</div><button class="council-skip">Παράλειψη σκηνής</button>`;
   document.body.append(ov);
-  let skipped = false;
-  ov.querySelector("button").onclick = () => (skipped = true);
+  let skipped = false,
+    advanceResolve = null;
+  const skipButton = ov.querySelector(".council-skip"),
+    advanceButton = ov.querySelector(".council-advance"),
+    tension = ov.querySelector(".council-tension");
+  skipButton.onclick = () => {
+    skipped = true;
+    advanceResolve?.();
+  };
+  advanceButton.onclick = () => advanceResolve?.();
   const h = ov.querySelector(".council-hud h1"),
     img = ov.querySelector(".reveal-portrait"),
     p = ov.querySelector(".council-hud p"),
     marshmallow = ov.querySelector(".marshmallow-badge"),
     wait = (ms) => new Promise((r) => setTimeout(r, skipped ? 60 : ms)),
+    setTension = (level, label = "ΕΝΤΑΣΗ") => {
+      tension.style.setProperty("--tension", `${Math.max(4, level)}%`);
+      tension.querySelector("b").textContent = label;
+    },
+    pulseHud = () => {
+      const hud = ov.querySelector(".council-hud");
+      hud.classList.remove("council-beat");
+      void hud.offsetWidth;
+      hud.classList.add("council-beat");
+    },
+    interactiveWait = (ms, label = "ΣΥΝΕΧΕΙΑ") =>
+      new Promise((resolve) => {
+        if (skipped) return resolve();
+        let settled = false;
+        advanceButton.textContent = label;
+        advanceButton.classList.add("visible");
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          advanceButton.classList.remove("visible");
+          advanceResolve = null;
+          resolve();
+        };
+        const timer = setTimeout(done, ms);
+        advanceResolve = done;
+      }),
     participantIds = [
       ...new Set([
         ...e.votes.map((v) => v.voter),
@@ -667,6 +746,7 @@ async function councilReveal(e) {
       colors,
     },
   );
+  setTension(18, "Η ΝΥΧΤΑ ΑΡΧΙΖΕΙ");
   await wait(900);
   for (const line of e.councilDialogue || []) {
     if (skipped) break;
@@ -678,6 +758,8 @@ async function councilReveal(e) {
     showPortrait(img, speaker);
     img.classList.add("visible");
     p.textContent = `“${line.text}”`;
+    pulseHud();
+    setTension(34, "ΣΤΡΑΤΗΓΙΚΗ");
     await wait(1900);
   }
   const confrontation = (e.councilDialogue || [])
@@ -693,6 +775,8 @@ async function councilReveal(e) {
     showPortrait(img, a);
     p.textContent = `${a.name} και ${b.name} σηκώνονται, ανταλλάσσουν βαριές κουβέντες και οι υπόλοιποι μπαίνουν ανάμεσά τους.`;
     ov.classList.add("council-clash");
+    setTension(92, "ΕΚΤΟΣ ΕΛΕΓΧΟΥ");
+    stage.hostCue?.("shock", 1800);
     await stage.confront(a.id, b.id);
     ov.classList.remove("council-clash");
     await wait(700);
@@ -705,12 +789,15 @@ async function councilReveal(e) {
     showPortrait(img, voter);
     img.classList.add("visible");
     p.textContent = "Η ψήφος παραμένει μυστική μέχρι την αποκάλυψη.";
+    setTension(45, `${e.votes.indexOf(vote) + 1}/${e.votes.length} ΨΗΦΟΙ`);
     await stage.vote(voter.id);
   }
   img.classList.remove("visible");
   h.textContent = "Η κάλπη σφραγίστηκε";
   p.textContent = "Ο παρουσιαστής θα ανακοινώσει ποιοι παραμένουν στο νησί.";
-  await wait(1000);
+  stage.hostCue?.("announce", 1600);
+  setTension(68, "Η ΑΠΟΦΑΣΗ ΕΡΧΕΤΑΙ");
+  await interactiveWait(1800, "ΕΝΑΡΞΗ ΑΠΟΚΑΛΥΨΗΣ");
   const idolPlays = e.idolPlays?.length
     ? e.idolPlays
     : e.idolPlayed
@@ -726,6 +813,7 @@ async function councilReveal(e) {
     await wait(1800);
     ov.classList.add("idol-twist");
     stage.idolBurst(actor.id, play.type);
+    setTension(100, "SPIRIT TWIST");
     h.textContent = `${idolIndex ? "ΚΙ ΑΛΛΟ RELIC!" : "Μισό λεπτό — έχει γίνει κάποιο λάθος!"}`;
     showPortrait(img, actor);
     p.innerHTML = `◆ ${esc(play.name || "IDOL")}<br>${esc(actor.name)} ενεργοποιεί τη δύναμή του: ${esc(play.effect || "οι ψήφοι αλλάζουν")}${play.redirectedTo ? `<br>Οι ψήφοι στρέφονται στον/στην ${esc(g.players.find((x) => x.id === play.redirectedTo)?.name)}.` : `<br>${esc(saved.name)}, η φλόγα σου παραμένει αναμμένη.`}`;
@@ -759,8 +847,12 @@ async function councilReveal(e) {
     p.textContent = row.n === 0
       ? "Καμία ψήφος. Η φλόγα σου μένει αναμμένη."
       : "Είσαι ασφαλής. Η φλόγα σου μένει αναμμένη.";
+    pulseHud();
+    setTension(66 + Math.round((safeRows.indexOf(row) / Math.max(1, safeRows.length)) * 18), "ΑΣΦΑΛΗΣ");
+    stage.hostCue?.("announce", 1100);
     stage.awardSafe(safe.id);
     await stage.revealVote(safe.name, "safe");
+    await interactiveWait(1050, "ΕΠΟΜΕΝΗ ΑΝΑΚΟΙΝΩΣΗ");
     ov.classList.remove("safe-reveal");
     marshmallow.classList.remove("visible");
   }
@@ -772,11 +864,15 @@ async function councilReveal(e) {
     img.classList.remove("visible");
     h.textContent = "Η ΑΠΟΦΑΣΗ ΕΙΝΑΙ ΜΕΤΑΞΥ ΑΥΤΩΝ ΤΩΝ ΔΥΟ";
     p.textContent = `${dangerPlayers[0].name} · ${dangerPlayers[1].name}`;
+    pulseHud();
+    setTension(96, "ΤΕΛΕΥΤΑΙΟΙ ΔΥΟ");
+    stage.hostCue?.("suspense", 2600);
     await stage.revealVote(
       `${dangerPlayers[0].name}  •  ${dangerPlayers[1].name}`,
       "danger",
     );
     await stage.suspense(dangerIds);
+    await interactiveWait(1700, "ΑΠΟΚΑΛΥΨΗ ΑΠΟΧΩΡΗΣΗΣ");
     ov.classList.remove("danger-reveal");
   }
   if (e.tieResolution) {
@@ -819,11 +915,13 @@ async function councilReveal(e) {
     const out = g.players.find((q) => q.id === eviction.id);
     if (!out) continue;
     ov.classList.add("elimination-shock");
+    setTension(100, "ΤΕΛΙΚΗ ΑΠΟΦΑΣΗ");
     img.classList.remove("visible");
     h.textContent = "Ο ΠΑΙΚΤΗΣ ΠΟΥ ΑΠΟΧΩΡΕΙ ΕΙΝΑΙ…";
     p.textContent = "Η τελευταία φλόγα τρεμοπαίζει.";
     await wait(1900);
     await stage.revealVote(out.name, "out");
+    pulseHud();
     h.textContent = out.name;
     showPortrait(img, out);
     img.classList.add("visible");
