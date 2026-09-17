@@ -1,6 +1,6 @@
 import { createGame, step, pairKey } from "./engine.js";
 import { mountSpirit3D } from "./cinema3d.js";
-const VERSION = "2026.09.17.1",
+const VERSION = "2026.09.17.2",
   files = [
     "Alex.webp",
     "Billy.webp",
@@ -375,7 +375,7 @@ function eventView(e, g) {
             : e.dialogue
               ? "ΣΥΖΗΤΗΣΕΙΣ"
               : stageName(e.stage).toUpperCase();
-  return `<section class="episode ${e.idolPlayed || e.idol ? "idol-event" : ""}"><span>EPISODE ${e.episode} · ${esc(category)}</span><h2>${esc(e.title)}</h2><div class="faces">${e.ids.map((id) => (get(id) ? portraitMarkup(get(id), `title="${esc(get(id).name)}"`) : "")).join("")}</div><p>${esc(e.text)}</p>${e.idol ? `<div class="idol-type-card"><b>◆ ${esc(e.idolName || "Κρυμμένο Idol")}</b><small>${esc(e.idolEffect || "Μυστική δύναμη")}</small></div>` : ""}${e.idolPlays?.length ? `<div class="idol-play-list">${e.idolPlays.map((x) => `◆ <b>${esc(x.name || "Idol")}</b> · ${esc(get(x.actor)?.name)}${x.redirectedTo ? ` στρέφει τις ψήφους στον/στην ${esc(get(x.redirectedTo)?.name)}` : ` προστατεύει τον/την ${esc(get(x.saved)?.name)}`}`).join("<br>")}</div>` : ""}${e.tieResolution ? `<div class="tie-card">⚡ ${esc(e.tieResolution.title)}</div>` : ""}${e.votes ? `<details open><summary>Ποιος ψήφισε ποιον</summary>${e.votes.map((v) => `<div class="vote-row"><span>${esc(get(v.voter)?.name)}${v.bonus ? " · BONUS" : ""}</span><b>→</b><span>${esc(get(v.target)?.name)}</span></div>`).join("")}</details>` : ""}</section>`;
+  return `<section class="episode ${e.idolPlayed || e.idol ? "idol-event" : ""}"><span>EPISODE ${e.episode} · ${esc(category)}</span><h2>${esc(e.title)}</h2><div class="faces">${e.ids.map((id) => (get(id) ? portraitMarkup(get(id), `title="${esc(get(id).name)}"`) : "")).join("")}</div><p>${esc(e.text)}</p>${e.idol ? `<div class="idol-type-card"><b>◆ ${esc(e.idolName || "Κρυμμένο Idol")}</b><small>${esc(e.idolEffect || "Μυστική δύναμη")}</small></div>` : ""}${e.idolPlays?.length ? `<div class="idol-play-list">${e.idolPlays.map((x) => `◆ <b>${esc(x.name || "Idol")}</b> · ${esc(get(x.actor)?.name)}${x.redirectedTo ? ` στρέφει τις ψήφους στον/στην ${esc(get(x.redirectedTo)?.name)}` : ` προστατεύει τον/την ${esc(get(x.saved)?.name)}`}`).join("<br>")}</div>` : ""}${e.tieResolution ? `<div class="tie-card">⚡ ${esc(e.tieResolution.title)}</div>` : ""}${e.votes ? `<details open><summary>Ποιος ψήφισε ποιον</summary>${e.votes.map((v) => `<div class="vote-row"><span>${esc(get(v.voter)?.name)}${v.bonus ? " · BONUS" : v.tieBreaker ? " · ΚΑΘΟΡΙΣΤΙΚΗ ΨΗΦΟΣ" : ""}</span><b>→</b><span>${esc(get(v.target)?.name)}</span></div>`).join("")}</details>` : ""}</section>`;
 }
 function historyView(g) {
   const episodes = [...new Set(g.history.map((e) => e.episode))].reverse();
@@ -633,13 +633,14 @@ async function councilReveal(e) {
   const g = state.game,
     ov = document.createElement("div");
   ov.className = "council";
-  ov.innerHTML = `<div class="council-stage3d"></div><div class="council-hud"><span>● LIVE · ΣΥΜΒΟΥΛΙΟ ΤΟΥ ΝΗΣΙΟΥ</span><h1>Οι παίκτες παίρνουν τις θέσεις τους</h1><img class="reveal-portrait"><p>Η ψηφοφορία αρχίζει.</p></div><div class="jury-badge">JURY · ${Math.max(0, g.jury.length - 1)}</div><button>Παράλειψη σκηνής</button>`;
+  ov.innerHTML = `<div class="council-stage3d"></div><div class="council-hud"><span>● LIVE · ΣΥΜΒΟΥΛΙΟ ΤΟΥ ΝΗΣΙΟΥ</span><div class="marshmallow-badge"><i></i><b>SAFE</b></div><h1>Οι παίκτες παίρνουν τις θέσεις τους</h1><img class="reveal-portrait"><p>Η ψηφοφορία αρχίζει.</p></div><div class="jury-badge">JURY · ${Math.max(0, g.jury.length - 1)}</div><button>Παράλειψη σκηνής</button>`;
   document.body.append(ov);
   let skipped = false;
   ov.querySelector("button").onclick = () => (skipped = true);
   const h = ov.querySelector(".council-hud h1"),
     img = ov.querySelector(".reveal-portrait"),
     p = ov.querySelector(".council-hud p"),
+    marshmallow = ov.querySelector(".marshmallow-badge"),
     wait = (ms) => new Promise((r) => setTimeout(r, skipped ? 60 : ms)),
     participantIds = [
       ...new Set([
@@ -708,19 +709,8 @@ async function councilReveal(e) {
   }
   img.classList.remove("visible");
   h.textContent = "Η κάλπη σφραγίστηκε";
-  p.textContent = "Οι φλόγες θα αποκαλύψουν την απόφαση.";
+  p.textContent = "Ο παρουσιαστής θα ανακοινώσει ποιοι παραμένουν στο νησί.";
   await wait(1000);
-  for (let voteIndex = 0; voteIndex < e.votes.length; voteIndex++) {
-    if (skipped) break;
-    const vote = e.votes[voteIndex],
-      target = g.players.find((q) => q.id === vote.target);
-    if (!target) continue;
-    h.textContent = `Ψήφος ${voteIndex + 1} · ${target.name}`;
-    showPortrait(img, target);
-    img.classList.add("visible");
-    p.textContent = "Ο παρουσιαστής γυρίζει την επόμενη κάρτα.";
-    await stage.revealVote(target.name);
-  }
   const idolPlays = e.idolPlays?.length
     ? e.idolPlays
     : e.idolPlayed
@@ -745,6 +735,50 @@ async function councilReveal(e) {
     p.textContent = "Το Συμβούλιο αλλάζει απόφαση.";
     await wait(1800);
   }
+  const departingIds = new Set(e.evictedIds || (e.evicted ? [e.evicted] : [])),
+    ranked = [...(e.voteTally || [])].sort((a, b) => b.n - a.n),
+    dangerIds = (e.dangerIds?.length
+      ? e.dangerIds
+      : e.tieResolution?.contestants?.length
+        ? e.tieResolution.contestants
+        : ranked.slice(0, 2).map((row) => row.id)
+    ).filter((id) => g.players.some((player) => player.id === id)),
+    dangerSet = new Set(dangerIds),
+    safeRows = [...ranked]
+      .sort((a, b) => a.n - b.n)
+      .filter((row) => !dangerSet.has(row.id) && !departingIds.has(row.id));
+  for (const row of safeRows) {
+    if (skipped) break;
+    const safe = g.players.find((player) => player.id === row.id);
+    if (!safe) continue;
+    marshmallow.classList.add("visible");
+    ov.classList.add("safe-reveal");
+    h.textContent = safe.name;
+    showPortrait(img, safe);
+    img.classList.add("visible");
+    p.textContent = row.n === 0
+      ? "Καμία ψήφος. Η φλόγα σου μένει αναμμένη."
+      : "Είσαι ασφαλής. Η φλόγα σου μένει αναμμένη.";
+    stage.awardSafe(safe.id);
+    await stage.revealVote(safe.name, "safe");
+    ov.classList.remove("safe-reveal");
+    marshmallow.classList.remove("visible");
+  }
+  const dangerPlayers = dangerIds
+    .map((id) => g.players.find((player) => player.id === id))
+    .filter(Boolean);
+  if (dangerPlayers.length === 2) {
+    ov.classList.add("danger-reveal");
+    img.classList.remove("visible");
+    h.textContent = "Η ΑΠΟΦΑΣΗ ΕΙΝΑΙ ΜΕΤΑΞΥ ΑΥΤΩΝ ΤΩΝ ΔΥΟ";
+    p.textContent = `${dangerPlayers[0].name} · ${dangerPlayers[1].name}`;
+    await stage.revealVote(
+      `${dangerPlayers[0].name}  •  ${dangerPlayers[1].name}`,
+      "danger",
+    );
+    await stage.suspense(dangerIds);
+    ov.classList.remove("danger-reveal");
+  }
   if (e.tieResolution) {
     const tied = e.tieResolution.contestants.map((id) =>
       g.players.find((x) => x.id === id),
@@ -767,9 +801,11 @@ async function councilReveal(e) {
       const survivor = g.players.find((x) => x.id === e.tieResolution.survivor);
       h.textContent = `${survivor.name} κερδίζει τη μονομαχία!`;
       showPortrait(img, survivor);
+      stage.awardSafe(survivor.id);
       p.textContent = "Η φλόγα του/της παραμένει αναμμένη.";
     } else if (e.tieResolution.type === "bothStay") {
       stage.celebrate(tied.map((x) => x.id));
+      tied.forEach((player) => stage.awardSafe(player.id));
       h.textContent = "ΠΑΡΑΜΕΝΟΥΝ ΚΑΙ ΟΙ ΔΥΟ!";
       p.textContent = "Καμία φλόγα δεν σβήνει απόψε.";
     } else {
@@ -782,13 +818,28 @@ async function councilReveal(e) {
   for (const eviction of e.evictions || []) {
     const out = g.players.find((q) => q.id === eviction.id);
     if (!out) continue;
+    ov.classList.add("elimination-shock");
+    img.classList.remove("visible");
+    h.textContent = "Ο ΠΑΙΚΤΗΣ ΠΟΥ ΑΠΟΧΩΡΕΙ ΕΙΝΑΙ…";
+    p.textContent = "Η τελευταία φλόγα τρεμοπαίζει.";
+    await wait(1900);
+    await stage.revealVote(out.name, "out");
     h.textContent = out.name;
     showPortrait(img, out);
+    img.classList.add("visible");
     p.textContent = `Η φλόγα σου σβήνει · Θέση ${eviction.place}`;
-    await wait(1200);
-    h.textContent = `${out.name}, πάρε τη δάδα σου`;
-    p.textContent = `Αποχωρεί από το νησί και παίρνει τη θέση ${eviction.place}.`;
-    await stage.exit(out.id);
+    await wait(1700);
+    if (eviction.angry) {
+      ov.classList.add("angry-exit");
+      h.textContent = `${out.name} ΕΚΡΗΓΝΥΤΑΙ!`;
+      p.textContent = `“${eviction.exitLine}”`;
+      await wait(1800);
+    } else {
+      h.textContent = `${out.name}, πάρε τη δάδα σου`;
+      p.textContent = `Αποχωρεί από το νησί και παίρνει τη θέση ${eviction.place}.`;
+    }
+    await stage.dramaticExit(out.id, eviction.angry);
+    ov.classList.remove("elimination-shock", "angry-exit");
   }
   if (!(e.evictions || []).length) {
     h.textContent = "Το Συμβούλιο ολοκληρώθηκε";
@@ -951,6 +1002,18 @@ async function finalReveal(e) {
   box.innerHTML = `<span>3Η ΘΕΣΗ</span><h1>${esc(third.name)}</h1>${portraitMarkup(third, 'class="final-single"')}<p>${e.tally.find((x) => x.id === third.id).n} ψήφοι</p>`;
   await wait(3000);
   if (stopped) return;
+  if (e.tieBreaker) {
+    const tied = e.tieBreaker.finalists.map(get).filter(Boolean),
+      chosen = get(e.tieBreaker.target);
+    ov.classList.add("final-tiebreak");
+    box.innerHTML = `<span>ΙΣΟΨΗΦΙΑ ΓΙΑ ΤΗ ΝΙΚΗ</span><h1>${esc(third.name)} ΑΠΟΦΑΣΙΖΕΙ</h1><div class="final-grid finalists">${tied.map((player) => `<figure>${portraitMarkup(player)}<figcaption>${esc(player.name)}</figcaption></figure>`).join("")}</div><p>Ο παίκτης της 3ης θέσης κρατά την καθοριστική ψήφο.</p>`;
+    await wait(3600);
+    if (stopped) return;
+    box.innerHTML = `<span>Η ΚΑΘΟΡΙΣΤΙΚΗ ΨΗΦΟΣ</span><h1>${esc(third.name)} ΨΗΦΙΖΕΙ…<br>${esc(chosen.name)}</h1>${portraitMarkup(chosen, 'class="final-single tiebreak-choice"')}<p>Η ισοψηφία έσπασε.</p>`;
+    await wait(3400);
+    if (stopped) return;
+    ov.classList.remove("final-tiebreak");
+  }
   box.innerHTML = `<span>FINAL TWO</span><h1>Μεταξύ των…</h1><div class="final-grid finalists">${e.finalTwo.map((id) => `<figure>${portraitMarkup(get(id))}<figcaption>${esc(get(id).name)}</figcaption></figure>`).join("")}</div>`;
   await wait(3000);
   if (stopped) return;

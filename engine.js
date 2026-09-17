@@ -152,18 +152,55 @@ export function step(s, rng = Math.random) {
           alive,
           (p) =>
             bond(v.id, p.id) + p.social * 1.1 + p.strategy * 0.7 + p.wins * 1.5,
-          rng,
+            rng,
         ).id,
-      }));
-    const tally = alive
-      .map((p) => ({
-        id: p.id,
-        n: votes.filter((v) => v.target === p.id).length,
-      }))
-      .sort((a, b) => b.n - a.n || get(b.id).social - get(a.id).social);
-    const third = tally[2],
+      })),
+      makeTally = () =>
+        alive
+          .map((p) => ({
+            id: p.id,
+            n: votes.filter((v) => v.target === p.id).length,
+          }))
+          .sort(
+            (a, b) =>
+              b.n - a.n ||
+              get(b.id).social + get(b.id).strategy * 0.35 -
+                (get(a.id).social + get(a.id).strategy * 0.35),
+          );
+    let tally = makeTally(),
+      third = tally[2],
       finalTwo = tally.slice(0, 2),
-      winner = get(finalTwo[0].id);
+      tieBreaker = null;
+    const tiedForWin = tally.filter((x) => x.n === tally[0].n);
+    if (tiedForWin.length >= 2) {
+      const contenders = tiedForWin.slice(0, 2);
+      third = tally.find((x) => !contenders.some((c) => c.id === x.id)) || tally[2];
+      const decidingPlayer = get(third.id),
+        target = pick(
+          contenders.map((x) => get(x.id)),
+          (candidate) =>
+            bond(decidingPlayer.id, candidate.id) +
+            candidate.social * 1.15 +
+            candidate.strategy * 0.55 +
+            candidate.wins,
+          rng,
+        );
+      votes.push({
+        voter: decidingPlayer.id,
+        target: target.id,
+        tieBreaker: true,
+      });
+      tieBreaker = {
+        voter: decidingPlayer.id,
+        target: target.id,
+        finalists: contenders.map((x) => x.id),
+      };
+      tally = makeTally();
+      finalTwo = contenders
+        .map((x) => tally.find((row) => row.id === x.id))
+        .sort((a, b) => b.n - a.n);
+    }
+    const winner = get(finalTwo[0].id);
     s.winner = winner.id;
     s.finalists = alive.map((p) => p.id);
     s.stage = "final";
@@ -173,10 +210,11 @@ export function step(s, rng = Math.random) {
       tally,
       third: third.id,
       finalTwo: finalTwo.map((x) => x.id),
+      tieBreaker,
     };
     return event(
       "Ο ζωντανός τελικός",
-      `${winner.name} κερδίζει το Spirit Island. Όλοι οι αποχωρήσαντες ψήφισαν τον νικητή.`,
+      `${winner.name} κερδίζει το Spirit Island. Όλοι οι αποχωρήσαντες ψήφισαν τον νικητή.${tieBreaker ? ` Μετά την ισοψηφία, ο/η ${name(tieBreaker.voter)} έδωσε την καθοριστική ψήφο.` : ""}`,
       alive.map((p) => p.id),
       { final: true, votes, ...s.finalData },
     );
@@ -659,21 +697,47 @@ export function step(s, rng = Math.random) {
     } else if (out) evictedIds.push(out);
     const evictions = evictedIds.map((id) => {
       const leaving = get(id),
-        place = s.players.length - s.order.length;
+        place = s.players.length - s.order.length,
+        angryChance = Math.min(
+          0.48,
+          0.1 + Math.max(0, 6 - leaving.social) * 0.045 + Math.max(0, leaving.strategy - 7) * 0.035,
+        ),
+        angry = rng() < angryChance,
+        angryLines = [
+          "Αυτό το καταραμένο νησί δεν αξίζει κανέναν σας!",
+          "Να πάτε όλοι στον διάβολο — θα τα πούμε έξω!",
+          "****! Νομίζετε ότι τελείωσε; Τώρα αρχίζει το χάος!",
+          "Κρατήστε τις ψεύτικες υποσχέσεις σας. Εγώ φεύγω όρθιος!",
+        ];
       leaving.out = true;
       s.order.push(id);
       if (s.merge) s.jury.push(id);
-      return { id, place };
+      return {
+        id,
+        place,
+        angry,
+        exitLine: angry ? angryLines[Math.floor(rng() * angryLines.length)] : null,
+      };
     });
-    const safeOrder = vulnerable
+    const voteTally = vulnerable
+        .map((p) => ({
+          id: p.id,
+          n: nullified.has(p.id)
+            ? 0
+            : votes.filter((v) => v.target === p.id).length,
+        }))
+        .sort((a, b) => b.n - a.n || rng() - 0.5),
+      dangerIds = tieResolution?.contestants?.length
+        ? [...tieResolution.contestants]
+        : voteTally.slice(0, 2).map((row) => row.id),
+      safeOrder = [...voteTally]
+        .sort((a, b) => a.n - b.n)
         .filter(
-          (p) =>
-            !evictedIds.includes(p.id) &&
-            !nullified.has(p.id) &&
-            !tieResolution?.contestants.includes(p.id),
+          (row) =>
+            !evictedIds.includes(row.id) &&
+            !dangerIds.includes(row.id),
         )
-        .sort(() => rng() - 0.5)
-        .map((p) => p.id),
+        .map((row) => row.id),
       place = evictions[0]?.place || null;
     s.individualImmune = null;
     s.safeTribe = null;
@@ -683,13 +747,14 @@ export function step(s, rng = Math.random) {
       evictions.length
         ? `${evictions.map((x) => `${name(x.id)} — Θέση ${x.place}`).join(" και ")}. ${tieResolution ? tieResolution.title + ". " : ""}${idolPlays.length ? `Παίχτηκαν ${idolPlays.length} διαφορετικά Idol.` : ""}`
         : `${tieResolution?.title}. Η ψηφοφορία ολοκληρώνεται χωρίς αποχώρηση.`,
-      safeOrder.concat([...nullified], evictedIds),
+      [...new Set([...safeOrder, ...dangerIds])],
       {
         council: true,
         evicted: evictedIds[0] || null,
         evictedIds,
         evictions,
         safeOrder,
+        dangerIds,
         place,
         idolPlayed,
         idolSaved,
@@ -697,7 +762,7 @@ export function step(s, rng = Math.random) {
         councilDialogue,
         tieResolution,
         votes,
-        voteTally: rank(),
+        voteTally,
       },
     );
     s.episode++;

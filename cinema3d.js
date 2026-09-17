@@ -503,29 +503,80 @@ function createHost(parent) {
   return host;
 }
 
-function voteCard(name) {
+function voteCard(name, kind = "safe") {
   const canvas = document.createElement("canvas");
   canvas.width = 768;
   canvas.height = 480;
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#e7dcc0";
+  ctx.fillStyle = kind === "out" ? "#261416" : kind === "danger" ? "#241f18" : "#e7dcc0";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = "#493621";
+  ctx.strokeStyle = kind === "out" ? "#ff5549" : kind === "danger" ? "#ffbd5d" : "#493621";
   ctx.lineWidth = 24;
   ctx.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
-  ctx.fillStyle = "#17252a";
-  ctx.font = "900 76px sans-serif";
+  ctx.fillStyle = kind === "out" ? "#ff6a5f" : kind === "danger" ? "#ffd27a" : "#17252a";
+  if (kind === "safe") {
+    ctx.fillStyle = "#fff8dc";
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, 96, 56, Math.PI, 0);
+    ctx.roundRect(canvas.width / 2 - 72, 92, 144, 82, 34);
+    ctx.fill();
+    ctx.fillStyle = "#1a2529";
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2 - 23, 125, 7, 0, TAU);
+    ctx.arc(canvas.width / 2 + 23, 125, 7, 0, TAU);
+    ctx.fill();
+  }
+  ctx.font = `900 ${kind === "danger" ? 54 : 70}px sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2, canvas.width - 90);
+  ctx.fillText(
+    name.toUpperCase(),
+    canvas.width / 2,
+    kind === "safe" ? 270 : canvas.height / 2,
+    canvas.width - 90,
+  );
   ctx.font = "700 24px sans-serif";
-  ctx.fillText("SPIRIT ISLAND · TRIBAL COUNCIL", canvas.width / 2, canvas.height - 62);
+  ctx.fillText(
+    kind === "safe"
+      ? "SAFE · Η ΦΛΟΓΑ ΠΑΡΑΜΕΝΕΙ ΑΝΑΜΜΕΝΗ"
+      : kind === "danger"
+        ? "ΟΛΑ ΚΡΙΝΟΝΤΑΙ ΜΕΤΑΞΥ ΑΥΤΩΝ"
+        : "Η ΑΠΟΦΑΣΗ ΤΟΥ ΝΗΣΙΟΥ",
+    canvas.width / 2,
+    canvas.height - 62,
+  );
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return new THREE.Mesh(
     new THREE.PlaneGeometry(1.75, 1.08),
     new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }),
   );
+}
+
+function marshmallowCharm(parent) {
+  const charm = new THREE.Group(),
+    white = new THREE.MeshStandardMaterial({
+      color: 0xfff7dc,
+      emissive: 0xffd978,
+      emissiveIntensity: 0.7,
+      roughness: 0.45,
+    }),
+    dark = material(0x172329, 0.7);
+  parent.add(charm);
+  const body = mesh(new THREE.CapsuleGeometry(0.18, 0.22, 6, 12), white, charm);
+  body.rotation.z = Math.PI / 2;
+  for (const side of [-1, 1])
+    mesh(new THREE.SphereGeometry(0.025, 8, 6), dark, charm, [side * 0.065, 0.04, 0.19]);
+  const halo = mesh(
+    new THREE.TorusGeometry(0.32, 0.025, 8, 28),
+    new THREE.MeshBasicMaterial({ color: 0xffd35f, transparent: true, opacity: 0.78 }),
+    charm,
+  );
+  halo.userData.challengePiece = true;
+  charm.position.set(0, 3.75, 0);
+  charm.scale.setScalar(0.01);
+  charm.userData.marshmallow = true;
+  return charm;
 }
 
 function decorateIsland(scene, mode) {
@@ -919,6 +970,21 @@ export async function mountSpirit3D(root, players, options = {}) {
         r.rightArm.rotation.z = -1.12;
         r.leftArm.rotation.x = -0.75;
         r.rightArm.rotation.x = -0.75;
+      } else if (a.userData.action === "panic") {
+        r.leftArm.rotation.z = 2.35 + Math.sin(phase * 2.2) * 0.22;
+        r.rightArm.rotation.z = -2.35 - Math.sin(phase * 2.2) * 0.22;
+        r.head.rotation.y = Math.sin(phase * 1.8) * 0.42;
+        a.position.y = Math.abs(Math.sin(phase * 1.7)) * 0.12;
+      } else if (a.userData.action === "shock") {
+        r.leftArm.rotation.z = 1.55;
+        r.rightArm.rotation.z = -1.55;
+        r.head.rotation.x = -0.18;
+        a.rotation.z = Math.sin(phase * 3.4) * 0.025;
+      } else if (a.userData.action === "rage") {
+        r.leftArm.rotation.x = -0.9 + Math.sin(phase * 3.5) * 1.05;
+        r.rightArm.rotation.x = -0.9 - Math.sin(phase * 3.5) * 1.05;
+        r.head.rotation.y = Math.sin(phase * 2.4) * 0.38;
+        a.rotation.z = Math.sin(phase * 2.8) * 0.11;
       } else {
         a.position.y = Math.sin(phase * 0.35) * 0.025;
       }
@@ -945,6 +1011,12 @@ export async function mountSpirit3D(root, players, options = {}) {
       }
       if (o.userData.raft) o.rotation.z = Math.sin(t * 1.6 + o.position.x) * 0.045;
       if (o.userData.target) o.rotation.z = Math.sin(t * 0.7 + o.position.x) * 0.08;
+      if (o.userData.marshmallow) {
+        const scale = Math.min(1, o.scale.x + 0.045);
+        o.scale.setScalar(scale);
+        o.position.y = 3.75 + Math.sin(t * 2.5) * 0.1;
+        o.rotation.y = Math.sin(t * 1.4) * 0.22;
+      }
     });
     particles.rotation.y = t * 0.025;
     renderer.render(scene, camera);
@@ -981,9 +1053,9 @@ export async function mountSpirit3D(root, players, options = {}) {
       await moveTo(id, home, "vote", 760);
       a.userData.action = "idle";
     },
-    async revealVote(name) {
+    async revealVote(name, kind = "safe") {
       if (!host) return;
-      const card = voteCard(name);
+      const card = voteCard(name, kind);
       card.position.set(0, 2.18, 0.9);
       card.rotation.y = Math.PI;
       card.scale.setScalar(0.08);
@@ -1005,6 +1077,89 @@ export async function mountSpirit3D(root, players, options = {}) {
       card.geometry.dispose();
       card.material.map.dispose();
       card.material.dispose();
+    },
+    awardSafe(id) {
+      const a = avatarMap.get(id);
+      if (!a) return;
+      if (!a.children.some((child) => child.userData.marshmallow))
+        marshmallowCharm(a);
+      a.userData.action = "celebrate";
+      setTimeout(() => {
+        if (!disposed && a.visible) a.userData.action = "idle";
+      }, 1250);
+    },
+    async suspense(ids = []) {
+      const danger = new Set(ids);
+      avatarMap.forEach((a, id) => {
+        a.userData.action = danger.has(id) ? "shock" : "panic";
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1450));
+      avatarMap.forEach((a, id) => {
+        if (!danger.has(id)) a.userData.action = "idle";
+      });
+    },
+    async dramaticExit(id, angry = false) {
+      const leaving = avatarMap.get(id);
+      if (!leaving) return;
+      avatarMap.forEach((a, avatarId) => {
+        a.userData.action = avatarId === id ? "shock" : "panic";
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1250));
+      if (angry) {
+        leaving.userData.action = "rage";
+        const debris = new THREE.Group(),
+          origin = leaving.position.clone(),
+          pieces = [];
+        scene.add(debris);
+        for (let i = 0; i < 18; i++) {
+          const piece = mesh(
+            i % 3
+              ? new THREE.BoxGeometry(0.12 + (i % 4) * 0.05, 0.08, 0.42)
+              : new THREE.DodecahedronGeometry(0.11 + (i % 2) * 0.05, 0),
+            material(i % 2 ? 0x6f3f24 : 0x393329, 0.88),
+            debris,
+            [origin.x + (Math.random() - 0.5) * 1.3, 0.3, origin.z + (Math.random() - 0.5)],
+          );
+          piece.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.075,
+            0.05 + Math.random() * 0.065,
+            (Math.random() - 0.5) * 0.07,
+          );
+          pieces.push(piece);
+        }
+        const rageLight = new THREE.PointLight(0xff3b27, 12, 13);
+        rageLight.position.copy(origin).add(new THREE.Vector3(0, 1.4, 0));
+        scene.add(rageLight);
+        const started = performance.now();
+        await new Promise((resolve) => {
+          const smash = (now) => {
+            const progress = Math.min(1, (now - started) / 1650);
+            pieces.forEach((piece) => {
+              piece.position.add(piece.userData.velocity);
+              piece.userData.velocity.y -= 0.0035;
+              piece.rotation.x += 0.12;
+              piece.rotation.z += 0.09;
+            });
+            camera.position.x = Math.sin(now * 0.07) * (1 - progress) * 0.12;
+            rageLight.intensity = 12 * (1 - progress * 0.75);
+            if (progress < 1 && !disposed) requestAnimationFrame(smash);
+            else resolve();
+          };
+          requestAnimationFrame(smash);
+        });
+        camera.position.x = 0;
+        scene.remove(debris, rageLight);
+        debris.traverse((item) => {
+          item.geometry?.dispose?.();
+          item.material?.dispose?.();
+        });
+      }
+      flame(leaving, 0.55, 1.15, 0.3);
+      await moveTo(id, new THREE.Vector3(7.8, 0, 7.4), "exit", angry ? 3100 : 2600);
+      leaving.visible = false;
+      avatarMap.forEach((a, avatarId) => {
+        if (avatarId !== id) a.userData.action = "idle";
+      });
     },
     async playChallenge(winnerIds = []) {
       const type = options.challengeType || "race",
