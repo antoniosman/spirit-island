@@ -1,29 +1,29 @@
 import { createGame, step, pairKey } from "./engine.js";
 import { mountSpirit3D } from "./cinema3d.js";
-const VERSION = "2026.09.17.4",
+const VERSION = "2026.09.17.5",
   files = [
-    "Alex.webp",
-    "Billy.webp",
+    "Alex.png",
+    "Billy.png",
     "Catherine.png",
-    "demarin.webp",
-    "elisa.webp",
+    "demarin.png",
+    "elisa.png",
     "Ester.png",
     "Eva.png",
     "Evaggelia.png",
-    "evelyn.webp",
-    "hope.webp",
+    "evelyn.png",
+    "hope.png",
     "Ian.png",
     "irene.png",
     "Jasmine.png",
     "Luna.webp",
     "Paul.png",
-    "pauline.webp",
-    "phillip.webp",
-    "rino.webp",
+    "pauline.png",
+    "phillip.png",
+    "rino.png",
     "sargenie.jpeg",
     "smaragda.jpeg",
     "Sorina.png",
-    "tony.webp",
+    "tony.png",
     "vicky.jpg",
     "Vincent.jpg",
     "Violet.png",
@@ -1420,7 +1420,15 @@ state.selected ||= defaults.slice(0, 16).map((p) => p.id);
 state.players ||= defaults;
 for (const standard of defaults) {
   const saved = state.players.find((p) => p.id === standard.id);
-  if (saved && !saved.custom) saved.faceImage = standard.faceImage;
+  if (saved && !saved.custom) {
+    saved.image = standard.image;
+    saved.faceImage = standard.faceImage;
+  }
+  const active = state.game?.players?.find((p) => p.id === standard.id);
+  if (active && !active.custom) {
+    active.image = standard.image;
+    active.faceImage = standard.faceImage;
+  }
 }
 state.tribes ||= [];
 if (state.game) {
